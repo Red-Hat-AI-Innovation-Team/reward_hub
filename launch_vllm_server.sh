@@ -5,19 +5,27 @@ if [ ! -d "logs" ]; then
     echo "Directory 'logs' created."
 fi
 
-CUDA_VISIBLE_DEVICES=0 python -u -m vllm.entrypoints.openai.api_server \
+
+# Accessing the first and second argument
+pref_model="$1"
+ref_model="$2"
+
+echo "pref_model: $pref_model"
+echo "ref_model: $ref_model"
+
+CUDA_VISIBLE_DEVICES=5 python -u -m vllm.entrypoints.openai.api_server \
        --host 0.0.0.0 \
-       --model NousResearch/Nous-Hermes-2-Mistral-7B-DPO \
-       --port 8000 \
+       --model $pref_model \
+       --port 8010 \
        --tensor-parallel-size 1 \
        --load-format auto \
        --download-dir ./download_dir > logs/server_0.log 2>&1 &
 
 
-CUDA_VISIBLE_DEVICES=1 python -u -m vllm.entrypoints.openai.api_server \
+CUDA_VISIBLE_DEVICES=7 python -u -m vllm.entrypoints.openai.api_server \
        --host 0.0.0.0 \
-       --model teknium/OpenHermes-2.5-Mistral-7B \
-       --port 8001 \
+       --model $ref_model \
+       --port 8011 \
        --tensor-parallel-size 1 \
        --load-format auto \
        --download-dir ./download_dir > logs/server_1.log 2>&1 &

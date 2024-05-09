@@ -15,10 +15,13 @@
 __version__ = "0.1.0.dev"
 from .dpo_vllm import DPOInferenceVLLM
 from .models import DPO_MODEL_CONFIG, REWARD_MODEL_CONFIG
+from .vllm_server import VLLM
 from .utils import (
     check_tokenizer_chat_template,
-    load_bon_dataset,
     save_to_local,
     convert_to_json_format,
-    load_simple_dataset
+    load_simple_dataset,
+    jdump,
+    zip_,
+    read_jsonl
 )

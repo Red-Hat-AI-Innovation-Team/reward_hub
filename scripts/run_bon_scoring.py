@@ -39,10 +39,18 @@ if HF_TOKEN is not None:
 
     _login(token=HF_TOKEN, add_to_git_credential=False)
 
+# def read_jsonl(path):
+#     data = []
+#     with open(path, 'r') as file:
+#         data = json.load(file)
+#     return data
+
 def read_jsonl(path):
     data = []
     with open(path, 'r') as file:
-        data = json.load(file)
+        for row in file:
+
+            data.append(json.loads(row))
     return data
 
 
@@ -52,7 +60,7 @@ def list_to_dataset(data):
     return dataset
 
 
-def load_ibm_bon_data(data_path):
+def load_ibm_bon_data(data_path, debug=False):
     """
     {
         "target_output": "Hi there! How can I help you today?",
@@ -70,7 +78,9 @@ def load_ibm_bon_data(data_path):
     },
     """
 
-    data = read_jsonl(data_path)[:100]
+    data = read_jsonl(data_path)
+    if debug:
+        data = data[:100]
     flattened_data = []
     id=0
     for instance in data:
@@ -175,7 +185,7 @@ def main():
 
     # The custom dataset must be made in to messages format:
     # [{content:  , role:  } ]
-    custom_dataset, input_dataset = load_ibm_bon_data(args.pref_sets)
+    custom_dataset, input_dataset = load_ibm_bon_data(args.pref_sets, debug=args.debug)
 
     # modify the load_eval_dataset to be handling single column outputs. 
     dataset = load_simple_dataset(
@@ -190,14 +200,13 @@ def main():
     if args.debug:
         dataset = dataset.select(range(10))
 
-    
     # save_dir
     if not args.save_dir:
         # write sth when dataset name is not available
         if args.pref_sets:
-            save_dir = os.path.dirname(args.pref_sets) + "/pref_annotations/"
+            save_dir = os.path.dirname(args.pref_sets) + "/" + args.model
         else:
-            save_dir = "./pref_annotations/"
+            save_dir = "./" + args.model
     else:
         save_dir = args.save_dir
     logger.info(f"Results to be saved to the following directory: {save_dir}")
@@ -216,19 +225,20 @@ def main():
     BATCH_SIZE = args.batch_size
 
     model = {
-        "model_name": "NousResearch/Nous-Hermes-2-Mistral-7B-DPO",
-        "port": 8000,
+        "model_name": args.model,
+        "port": 8020,
     }
 
     ref_model = {
-        "model_name": "teknium/OpenHermes-2.5-Mistral-7B",
-        "port": 8001,
+        "model_name": args.ref_model,
+        "port": 8030,
     }
 
     # use internal inference functions in DPO trainer
     dpo = DPOInferenceVLLM(
         model,
-        ref_model
+        ref_model,
+        tokenizer
     )
 
     dataloader = torch.utils.data.DataLoader(
@@ -254,7 +264,10 @@ def main():
     raw_out_dataset = dataset.add_column("results", final_scores)
 
     best_of_n_samples, rewards_ls, samples_to_reward_dicts = [], [], []
-    best_of_n = int(len(raw_out_dataset)/len(input_dataset))
+    try:
+        best_of_n = int(len(raw_out_dataset)/len(input_dataset))
+    except:
+        breakpoint()
     
     for i, instance in enumerate(input_dataset):
         start_index, end_index = i*best_of_n, i*best_of_n+best_of_n
@@ -288,16 +301,17 @@ def main():
     output_filename = os.path.basename(args.pref_sets)+"-rewards.jsonl"
 
     output_save_path = os.path.join(save_dir, output_filename)
-    scores_url = save_to_local(
-        input_dataset, 
-        output_save_path
-    )
+    input_dataset.to_json(output_save_path)
+    # scores_url = save_to_local(
+    #     input_dataset, 
+    #     output_save_path
+    # )
     raw_output_save_path = output_save_path+"-raw.jsonl"
     save_to_local(
             raw_out_dataset, 
             raw_output_save_path
         )
-    logger.info(f"Uploading chosen-rejected text with scores to {scores_url}")
+    # logger.info(f"Uploading chosen-rejected text with scores to {scores_url}")
 
 
 if __name__ == "__main__":
