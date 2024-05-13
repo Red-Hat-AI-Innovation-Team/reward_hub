@@ -29,6 +29,8 @@ import math
 from src import DPO_MODEL_CONFIG, save_to_local, convert_to_json_format, DPOInferenceVLLM, load_simple_dataset
 import json 
 import pandas as pd
+from transformers import AutoTokenizer
+from multiprocessing import Process, Manager
 
 
 # get token from HF_TOKEN env variable, but if it doesn't exist pass none
@@ -80,7 +82,11 @@ def load_ibm_bon_data(data_path, debug=False):
 
     data = read_jsonl(data_path)
     if debug:
-        data = data[:100]
+        data = data[:10]
+    
+    for instance in data:
+        if instance["target_output"]:
+            instance["output"] = [instance["target_output"]] + instance["output"]
     flattened_data = []
     id=0
     for instance in data:
@@ -94,7 +100,7 @@ def load_ibm_bon_data(data_path, debug=False):
                 "original_prompt": prompt,
                 "prompt": raw_prompt,
                 "response": output_candidates[can_idx],
-                "subset": "custom"
+                "subset": "sampling"
             }
             flattened_data.append(pref_instance)
             id+=1
@@ -119,6 +125,8 @@ def get_args():
     parser.add_argument("--chat_template", type=str, default="tulu", help="path to chat template")
     parser.add_argument("--do_not_save", action="store_false", help="do not save results to hub (for debugging)")
     parser.add_argument("--batch_size", type=int, default=6, help="batch size for inference")
+    parser.add_argument("--num_threads", type=int, default=1, help="how many threads to submit")
+    parser.add_argument("--base_port", type=int, default=8010, help="the base_port to infer other ports to make API calls for")
     parser.add_argument(
         "--pref_sets",
         type=str,
@@ -135,6 +143,49 @@ def get_args():
 
     args = parser.parse_args()
     return args
+
+
+def reward_annotation(pref_port, ref_port, chunked_data_dict, args, thread_idx, results):
+    ############################
+    # Load reward model pipeline
+    ############################
+    dataset = chunked_data_dict[thread_idx]
+    
+    BATCH_SIZE = args.batch_size
+    model = {
+        "model_name": args.model,
+        "port": pref_port,
+    }
+
+    ref_model = {
+        "model_name": args.ref_model,
+        "port": ref_port,
+    }
+    tokenizer_path = args.tokenizer if args.tokenizer else args.model
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+    # use internal inference functions in DPO trainer
+    dpo_annotator = DPOInferenceVLLM(
+        model,
+        ref_model,
+        tokenizer
+    )
+
+    dataloader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=BATCH_SIZE,
+        collate_fn = lambda x: x, # fix weird batching error
+        shuffle=False,
+        drop_last=False,
+    )
+
+    all_scores= []
+
+    for step, batch in enumerate(tqdm(dataloader, desc="RM batch steps")):
+        print(f"RM inference step {step}/{len(dataloader)}")
+        scores = dpo_annotator.monolithic_inference_step(batch)
+        all_scores += scores
+
+    results[thread_idx] = all_scores 
 
 
 def main():
@@ -195,7 +246,7 @@ def main():
         logger=logger,
         keep_columns=["formatted_output", "prompt", "original_prompt", "response"],
     )
-
+    
     # debug: use only 10 examples
     if args.debug:
         dataset = dataset.select(range(10))
@@ -220,42 +271,42 @@ def main():
         logger.info(f"Running DPO with reference model {args.ref_model}")
 
     ############################
-    # Load reward model pipeline
+    # Multi-threading to leverage multiple threads to increase throughput
     ############################
-    BATCH_SIZE = args.batch_size
 
-    model = {
-        "model_name": args.model,
-        "port": 8020,
-    }
+    manager = Manager()
+    results = manager.dict()
+    processes = []
+    chunked_data_dict = {}
+    base_port = args.base_port
+    gpu_chunk_size = int(len(dataset)/args.num_threads)+1
 
-    ref_model = {
-        "model_name": args.ref_model,
-        "port": 8030,
-    }
+    for thread_idx in range(args.num_threads):
 
-    # use internal inference functions in DPO trainer
-    dpo = DPOInferenceVLLM(
-        model,
-        ref_model,
-        tokenizer
-    )
+        start_idx = thread_idx * gpu_chunk_size
+        end_idx = start_idx + gpu_chunk_size
+        thread_dataset = dataset.select(range(start_idx, end_idx))
+        chunked_data_dict[thread_idx] = thread_dataset
+        pref_port = base_port
+        ref_port = base_port + 1
+        base_port+=2
+        # currently, it's sequential, needs to make it distributed.
+        # only apply on non-empty cases
+        if thread_dataset and len(thread_dataset)>0:
+            processes.append(
+                Process(target=reward_annotation, args=(pref_port, ref_port, chunked_data_dict, args, thread_idx, results)),
+            )
+    for process in processes:
+        process.start()
 
-    dataloader = torch.utils.data.DataLoader(
-        dataset,
-        batch_size=BATCH_SIZE,
-        collate_fn = lambda x: x, # fix weird batching error
-        shuffle=False,
-        drop_last=False,
-    )
+    for process in processes:
+        process.join()
 
-
-    final_scores= []
-
-    for step, batch in enumerate(tqdm(dataloader, desc="RM batch steps")):
-        logger.info(f"RM inference step {step}/{len(dataloader)}")
-        scores = dpo.monolithic_inference_step(batch)
-        final_scores += scores
+    final_scores = []
+    for thread_idx in range(args.num_threads):
+        if thread_idx in results and results[thread_idx]:
+            final_scores.extend(results[thread_idx])
+            
 
     ############################
     # Print & process results
@@ -292,20 +343,18 @@ def main():
     # give a best of N response, along with scoring dict: with score matching each output.  
     input_dataset = input_dataset.add_column("best_of_n_sample", best_of_n_samples)
     
+    best_of_n_equal_target = [best_of_n_samples[i]==input_dataset[i]["target_output"] for i in range(len(best_of_n_samples))]
+    
+    input_dataset = input_dataset.add_column("target_is_bestn", best_of_n_equal_target)
+    
     input_dataset = input_dataset.add_column("output_reward_scores", rewards_ls)
     
-    # add an output to scoring dict
-    # input_dataset = input_dataset.add_column("samples_to_reward", samples_to_reward_dicts)
-
 
     output_filename = os.path.basename(args.pref_sets)+"-rewards.jsonl"
 
     output_save_path = os.path.join(save_dir, output_filename)
     input_dataset.to_json(output_save_path)
-    # scores_url = save_to_local(
-    #     input_dataset, 
-    #     output_save_path
-    # )
+
     raw_output_save_path = output_save_path+"-raw.jsonl"
     save_to_local(
             raw_out_dataset, 
@@ -315,4 +364,6 @@ def main():
 
 
 if __name__ == "__main__":
+    # load_ibm_bon_data("/dccstor/gxamr/linux-386/llm-alignment/preference-generator/uniform_sample_dataset_30k/best_of_64/bon_sampling_data_split_0.jsonl", debug=True)
+
     main()
