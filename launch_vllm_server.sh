@@ -6,8 +6,8 @@ if [ ! -d "logs" ]; then
 fi
 
 ray disable-usage-stats
-export OPENBLAS_NUM_THREADS=18
-export OMP_NUM_THREADS=18
+export OPENBLAS_NUM_THREADS=8
+export OMP_NUM_THREADS=8
 ray start --head --num-cpus=32 --num-gpus=8
 
 
