@@ -169,11 +169,23 @@ def data_distribution_inference(
     truncate_method="middle",
     num_gpus=None,
     shuffle=False,
+    shard_nums=1,
+    shard_idx=0,
 ):
     if "mt_bench" in dataset_path:
         list_dict_data = load_best_of_n_mt_bench("questions.jsonl", "merlinite-model-answer3/merlinite-7b-4.jsonl")
     else:
         list_dict_data = read_input_jsonl(dataset_path)
+
+    # obtain the shard_range; ignore if they are not set. 
+    if shard_nums <= 1:
+        print("Use full dataset")
+    else:
+        shard_size = len(list_dict_data)//int(shard_nums)
+        shard_start, shard_end = shard_idx * shard_size, shard_idx * shard_size + shard_size
+        list_dict_data = list_dict_data[shard_start:shard_end] 
+        print("Dumping dataset between shard_indices: ", shard_start, shard_end)
+
     if shuffle:
         random.shuffle(list_dict_data)
         print("dataset is being shuffled")
