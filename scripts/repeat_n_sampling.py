@@ -8,20 +8,37 @@ import pandas as pd
 import io
 import json
 import os
-from src import VLLM
 import math
 from tqdm import tqdm
 import torch
 from src import (
     jdump,
     zip_,
-    read_jsonl
+    read_jsonl,
+    TGI,
+    VLLM
 )
 import random
 from transformers import AutoTokenizer
 from multiprocessing import Process, Manager
 from mt_best_of_n import load_best_of_n_mt_bench
 from datasets import Dataset
+
+
+def read_input_jsonl(path):
+    data = []
+    with open(path, 'r') as file:
+        for line in file:
+            # Parse the JSON data from each line and append to the list
+            ex = json.loads(line)
+            if "prompt" in ex:
+                ex["formatted_input"] = ex["prompt"]
+            assert "targets" in ex 
+            assert "dataset" in ex 
+            assert "group" in ex 
+            assert "formatted_input" in ex
+            data.append(ex)
+    return data
 
 
 def truncate_prompt(prompt, tokenizer, max_prompt_length=1024, truncate_method="middle"):
@@ -84,7 +101,7 @@ def repeat_n_sample(
     prompts = [truncate_prompt(ex, tokenizer, max_prompt_length=max_prompt_length, truncate_method=truncate_method) for ex in prompts]
    
     # this class instance only provides function call abilities for now
-    vllm_server = VLLM(model_name=decoder_name_or_path)
+    vllm_server = VLLM(decoder_name_or_path, port=port)
     outputs = []
 
     for i in tqdm(range(math.ceil(len(prompts)/float(vllm_batch_size)))):
@@ -156,8 +173,7 @@ def data_distribution_inference(
     if "mt_bench" in dataset_path:
         list_dict_data = load_best_of_n_mt_bench("questions.jsonl", "merlinite-model-answer3/merlinite-7b-4.jsonl")
     else:
-        list_dict_data = read_jsonl(dataset_path)
-    
+        list_dict_data = read_input_jsonl(dataset_path)
     if shuffle:
         random.shuffle(list_dict_data)
         print("dataset is being shuffled")

@@ -100,7 +100,7 @@ def load_ibm_bon_data(data_path, debug=False):
                 "original_prompt": prompt,
                 "prompt": raw_prompt,
                 "response": output_candidates[can_idx],
-                "subset": "sampling"
+                "subset": "custom"
             }
             flattened_data.append(pref_instance)
             id+=1
@@ -239,17 +239,13 @@ def main():
     custom_dataset, input_dataset = load_ibm_bon_data(args.pref_sets, debug=args.debug)
 
     # modify the load_eval_dataset to be handling single column outputs. 
-    dataset = load_simple_dataset(
+    simple_dataset = load_simple_dataset(
         custom_dataset,
         conv=conv,
         tokenizer=tokenizer,
         logger=logger,
         keep_columns=["formatted_output", "prompt", "original_prompt", "response"],
     )
-    
-    # debug: use only 10 examples
-    if args.debug:
-        dataset = dataset.select(range(10))
 
     # save_dir
     if not args.save_dir:
@@ -279,13 +275,13 @@ def main():
     processes = []
     chunked_data_dict = {}
     base_port = args.base_port
-    gpu_chunk_size = int(len(dataset)/args.num_threads)+1
+    gpu_chunk_size = int(len(simple_dataset)/args.num_threads)+1
 
     for thread_idx in range(args.num_threads):
 
         start_idx = thread_idx * gpu_chunk_size
-        end_idx = start_idx + gpu_chunk_size
-        thread_dataset = dataset.select(range(start_idx, end_idx))
+        end_idx = min(len(simple_dataset), start_idx + gpu_chunk_size)
+        thread_dataset = simple_dataset.select(range(start_idx, end_idx))
         chunked_data_dict[thread_idx] = thread_dataset
         pref_port = base_port
         ref_port = base_port + 1
@@ -312,14 +308,14 @@ def main():
     # Print & process results
     ############################
     # add column for results for easy printing
-    raw_out_dataset = dataset.add_column("results", final_scores)
+    raw_out_dataset = simple_dataset.add_column("results", final_scores)
 
     best_of_n_samples, rewards_ls, samples_to_reward_dicts = [], [], []
     try:
         best_of_n = int(len(raw_out_dataset)/len(input_dataset))
     except:
         breakpoint()
-    
+    breakpoint()
     for i, instance in enumerate(input_dataset):
         start_index, end_index = i*best_of_n, i*best_of_n+best_of_n
         mapped_outputs = raw_out_dataset.select(range(start_index, end_index))
@@ -329,7 +325,7 @@ def main():
         
         # saninty check
         for in_idx, ex in enumerate(mapped_outputs):
-            assert ex["original_prompt"] == instance["prompt"], "original prompt and flattened prompt don't mat"
+            assert ex["original_prompt"] == instance["prompt"], "original prompt and flattened prompt don't match"
 
             # this is somewhere that I'm should do another sanity check
             assert instance["output"][in_idx] == ex["response"], "original order is being disrupted"

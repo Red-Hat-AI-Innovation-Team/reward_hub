@@ -71,6 +71,7 @@ def load_question_file_turn1(question_file):
     ]
     return input_data
 
+
 def load_question_file_turn2(question_file, response_file):
     question_data = read_jsonl(question_file)
     response_data = read_jsonl(response_file)
@@ -95,7 +96,7 @@ def load_best_of_n_mt_bench(question_file, response_file):
     return t1+t2
 
 
-
 if __name__ == "__main__":
     list_dict_data = load_best_of_n_mt_bench("questions.jsonl", "merlinite-model-answer3/merlinite-7b-4.jsonl")
     breakpoint()
+

@@ -5,6 +5,13 @@ if [ ! -d "logs" ]; then
     echo "Directory 'logs' created."
 fi
 
+check_success() {
+    local file=$1
+    local message="Started server process"
+    # Tail the log file and grep for success message, exit when found
+    tail -f "$file" | grep -q "$message"
+    echo "Server at $file has started successfully."
+}
 
 # Accessing the first
 server_engine="$1"
@@ -24,9 +31,18 @@ do
     CUDA_VISIBLE_DEVICES=$gpu_idx python -u -m vllm.entrypoints.openai.api_server \
         --host 0.0.0.0 \
         --model $server_engine \
-        --port 800${gpu_idx} \
+        --port 802${gpu_idx} \
         --tensor-parallel-size 1 \
         --load-format auto \
         --dtype float16 \
-        --download-dir ./download_dir > logs/gen_server_${gpu_idx}.log 2>&1 &
+        --download-dir ./download_dir > logs/server_${gpu_idx}.log 2>&1 &
+    sleep 1
+    # Start monitoring each server log
+    check_success "logs/server_${gpu_idx}.log" &
+    pid_array+=($!)  # Save the PID of the check_success process
+done
+
+# Wait only for the check_success processes
+for pid in "${pid_array[@]}"; do
+    wait $pid
 done
