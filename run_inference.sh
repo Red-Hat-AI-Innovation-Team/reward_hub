@@ -45,7 +45,7 @@ for bestn in 64; do
     --num_return_sequences "$bestn" \
     --shard_nums "$SHARD_NUMS" \
     --shard_idx "$SHARD_IDX" \
-    > "logs/pref_30k_64_sampling_batch0_shard_${SHARD_IDX}.log" 2>&1 &
+    > "logs/pref_30k_64_sampling_batch0_shard_${SHARD_IDX}.log" 2>&1
 
     # Echo the process ID of the last background process
     echo $!
