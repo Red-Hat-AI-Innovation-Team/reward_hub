@@ -25,7 +25,7 @@ for bestn in 64; do
     filename="${filename_with_extension%.jsonl}"
 
     # Launch repeat_n_sampling
-    python scripts/repeat_n_sampling.py --decoder_name_or_path "$model_engine" --base_port 8000 --output_path "$output_dir/bon_sampling_data_split_0.jsonl" --dataset_path="$input_data" --num_return_sequences "$bestn" > "logs/pref_30k_64_sampling_batch0.log" 2>&1 &
+    python scripts/repeat_n_sampling.py --decoder_name_or_path "$model_engine" --base_port 8020 --output_path "$output_dir/bon_sampling_data_split_0.jsonl" --dataset_path="$input_data" --num_return_sequences "$bestn" > "logs/pref_30k_64_sampling_batch0.log" 2>&1 &
     echo $!
     
     # Run bon scoring
