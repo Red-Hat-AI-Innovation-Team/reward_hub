@@ -21,7 +21,7 @@ python scripts/run_bon_scoring.py \
     --ref_model="$ref_model" \
     --num_threads 1 \
     --base_port 8020 \
-    --batch_size=4 \
+    --batch_size=8 \
     --debug True \
     --pref_sets $input_data
 
