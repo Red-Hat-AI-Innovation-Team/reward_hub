@@ -13,9 +13,8 @@ SHARD_IDX=${1:-0}
 
 echo "Shard index is: $SHARD_IDX"
 
-bash launch_sampling_server.sh $model_engine
-
 bestn=64
+mkdir -p logs
 
 filename_with_extension=$(basename "$input_data")
 # Remove the .jsonl extension
@@ -31,5 +30,5 @@ python scripts/run_bon_scoring.py \
     --base_port 8020 \ # where to expect server port to start from
     --batch_size=4 \
     --debug True \
-    --pref_sets $input_data > "logs/$filename-shard-$SHARD_IDX.log" 2>&1
+    --pref_sets $input_data
 

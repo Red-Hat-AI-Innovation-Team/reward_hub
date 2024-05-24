@@ -188,6 +188,47 @@ def reward_annotation(pref_port, ref_port, chunked_data_dict, args, thread_idx, 
     results[thread_idx] = all_scores 
 
 
+def reward_annotation_single(pref_port, ref_port, dataset, args):
+    ############################
+    # Load reward model pipeline
+    ############################
+    
+    BATCH_SIZE = args.batch_size
+    model = {
+        "model_name": args.model,
+        "port": pref_port,
+    }
+
+    ref_model = {
+        "model_name": args.ref_model,
+        "port": ref_port,
+    }
+    tokenizer_path = args.tokenizer if args.tokenizer else args.model
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+    # use internal inference functions in DPO trainer
+    dpo_annotator = DPOInferenceVLLM(
+        model,
+        ref_model,
+        tokenizer
+    )
+
+    dataloader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=BATCH_SIZE,
+        collate_fn = lambda x: x, # fix weird batching error
+        shuffle=False,
+        drop_last=False,
+    )
+
+    all_scores= []
+
+    for step, batch in enumerate(tqdm(dataloader, desc="RM batch steps")):
+        print(f"RM inference step {step}/{len(dataloader)}")
+        scores = dpo_annotator.monolithic_inference_step(batch)
+        all_scores += scores
+    return all_scores
+
+
 def main():
     args = get_args()
     accelerator = Accelerator()
@@ -269,40 +310,42 @@ def main():
     ############################
     # Multi-threading to leverage multiple threads to increase throughput
     ############################
+    if not args.debug:
+        manager = Manager()
+        results = manager.dict()
+        processes = []
+        chunked_data_dict = {}
+        base_port = args.base_port
+        gpu_chunk_size = int(len(simple_dataset)/args.num_threads)+1
 
-    manager = Manager()
-    results = manager.dict()
-    processes = []
-    chunked_data_dict = {}
-    base_port = args.base_port
-    gpu_chunk_size = int(len(simple_dataset)/args.num_threads)+1
+        for thread_idx in range(args.num_threads):
 
-    for thread_idx in range(args.num_threads):
+            start_idx = thread_idx * gpu_chunk_size
+            end_idx = min(len(simple_dataset), start_idx + gpu_chunk_size)
+            thread_dataset = simple_dataset.select(range(start_idx, end_idx))
+            chunked_data_dict[thread_idx] = thread_dataset
+            pref_port = base_port
+            ref_port = base_port + 1
+            base_port+=2
+            # currently, it's sequential, needs to make it distributed.
+            # only apply on non-empty cases
+            if thread_dataset and len(thread_dataset)>0:
+                processes.append(
+                    Process(target=reward_annotation, args=(pref_port, ref_port, chunked_data_dict, args, thread_idx, results)),
+                )
+        for process in processes:
+            process.start()
 
-        start_idx = thread_idx * gpu_chunk_size
-        end_idx = min(len(simple_dataset), start_idx + gpu_chunk_size)
-        thread_dataset = simple_dataset.select(range(start_idx, end_idx))
-        chunked_data_dict[thread_idx] = thread_dataset
-        pref_port = base_port
-        ref_port = base_port + 1
-        base_port+=2
-        # currently, it's sequential, needs to make it distributed.
-        # only apply on non-empty cases
-        if thread_dataset and len(thread_dataset)>0:
-            processes.append(
-                Process(target=reward_annotation, args=(pref_port, ref_port, chunked_data_dict, args, thread_idx, results)),
-            )
-    for process in processes:
-        process.start()
+        for process in processes:
+            process.join()
 
-    for process in processes:
-        process.join()
+        final_scores = []
+        for thread_idx in range(args.num_threads):
+            if thread_idx in results and results[thread_idx]:
+                final_scores.extend(results[thread_idx])
+    else:
+        final_scores = reward_annotation_single(args.base_port, args.base_port + 1, simple_dataset, args)
 
-    final_scores = []
-    for thread_idx in range(args.num_threads):
-        if thread_idx in results and results[thread_idx]:
-            final_scores.extend(results[thread_idx])
-            
 
     ############################
     # Print & process results
@@ -311,10 +354,9 @@ def main():
     raw_out_dataset = simple_dataset.add_column("results", final_scores)
 
     best_of_n_samples, rewards_ls, samples_to_reward_dicts = [], [], []
-    try:
-        best_of_n = int(len(raw_out_dataset)/len(input_dataset))
-    except:
-        breakpoint()
+
+    best_of_n = int(len(raw_out_dataset)/len(input_dataset))
+
 
     for i, instance in enumerate(input_dataset):
         start_index, end_index = i*best_of_n, i*best_of_n+best_of_n

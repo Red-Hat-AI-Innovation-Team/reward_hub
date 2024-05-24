@@ -95,10 +95,7 @@ class DPOInferenceVLLM:
             chosen_logprob, chosen_ref_logprob, rejected_logprob, rejected_ref_logprob = \
                 np.array(chosen_logprobs[idx]), np.array(chosen_ref_logprobs[idx]), np.array(rejected_logprobs[idx]), np.array(rejected_ref_logprobs[idx])
             response_start_idx = generation_first_token_indices[idx]
-            
-            if response_start_idx >= len(chosen_tokens[idx]):
-                print("the truncation point is greater than the return full tokens. ")
-                breakpoint()
+
             # this thing produce a zero, in the case when response_start_idx is greater than the largest thing in the chosen_tokens
             chosen_unmask_indices = [
                 i for i, token in enumerate(chosen_tokens[idx]) if i >= response_start_idx and token != PAD_TOKEN
@@ -146,7 +143,13 @@ class DPOInferenceVLLM:
                 77
             ]
         """
-        chosen_batch, prompt_batch = [self.truncate_prompt(ex["formatted_output"], max_prompt_length=500) for ex in batch], [self.truncate_prompt(ex["prompt"], max_prompt_length=1500) for ex in batch]
+        chosen_batch, prompt_batch = [ex["formatted_output"] for ex in batch], [self.truncate_prompt(ex["prompt"], max_prompt_length=1500) for ex in batch]
+        
+        # set a very high truncation threshold for both prompt and output
+        # TODO: the current truncation is fixed; modify in the future;
+        # Reward annotation in the 2500 range should be enough
+        prompt_batch = [self.truncate_prompt(x , max_prompt_length=2000) for x in prompt_batch]
+        chosen_batch = [self.truncate_prompt(x , max_prompt_length=2500) for x in chosen_batch]
 
         tokenized_prompt_batch = [self.tokenizer.encode(ex) for ex in prompt_batch]
 
