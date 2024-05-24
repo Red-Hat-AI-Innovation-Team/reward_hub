@@ -144,7 +144,7 @@ class DPOInferenceVLLM:
             ]
         """
         chosen_batch, prompt_batch = [ex["formatted_output"] for ex in batch], [self.truncate_prompt(ex["prompt"], max_prompt_length=1500) for ex in batch]
-        
+
         # set a very high truncation threshold for both prompt and output
         # TODO: the current truncation is fixed; modify in the future;
         # Reward annotation in the 2500 range should be enough
