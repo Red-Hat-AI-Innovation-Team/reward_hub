@@ -1,12 +1,6 @@
 # preference-generator
 
 
-
-### Install flash-attention to speedup
-```bash
-python -m pip install flash-attn --no-build-isolation
-```
-
 ### Ray Distributed Cluster
 
 We use the following setup due to the default hardware on a VELA node; 
