@@ -124,9 +124,9 @@ def get_args():
     parser.add_argument("--tokenizer", type=str, default=None, help="path to non-matching tokenizer")
     parser.add_argument("--chat_template", type=str, default="tulu", help="path to chat template")
     parser.add_argument("--do_not_save", action="store_false", help="do not save results to hub (for debugging)")
-    parser.add_argument("--batch_size", type=int, default=6, help="batch size for inference")
+    parser.add_argument("--batch_size", type=int, default=4, help="batch size for inference")
     parser.add_argument("--num_threads", type=int, default=1, help="how many threads to submit")
-    parser.add_argument("--base_port", type=int, default=8010, help="the base_port to infer other ports to make API calls for")
+    parser.add_argument("--base_port", type=int, default=8020, help="the base_port to infer other ports to make API calls for")
     parser.add_argument(
         "--pref_sets",
         type=str,
@@ -315,7 +315,7 @@ def main():
         best_of_n = int(len(raw_out_dataset)/len(input_dataset))
     except:
         breakpoint()
-    breakpoint()
+
     for i, instance in enumerate(input_dataset):
         start_index, end_index = i*best_of_n, i*best_of_n+best_of_n
         mapped_outputs = raw_out_dataset.select(range(start_index, end_index))

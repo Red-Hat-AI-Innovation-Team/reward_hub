@@ -96,6 +96,10 @@ class DPOInferenceVLLM:
                 np.array(chosen_logprobs[idx]), np.array(chosen_ref_logprobs[idx]), np.array(rejected_logprobs[idx]), np.array(rejected_ref_logprobs[idx])
             response_start_idx = generation_first_token_indices[idx]
             
+            if response_start_idx >= len(chosen_tokens[idx]):
+                print("the truncation point is greater than the return full tokens. ")
+                breakpoint()
+            # this thing produce a zero, in the case when response_start_idx is greater than the largest thing in the chosen_tokens
             chosen_unmask_indices = [
                 i for i, token in enumerate(chosen_tokens[idx]) if i >= response_start_idx and token != PAD_TOKEN
             ]

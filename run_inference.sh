@@ -43,7 +43,7 @@ for bestn in 64; do
     python scripts/repeat_n_sampling.py \
     --decoder_name_or_path "$model_engine" \
     --base_port 8020 \
-    --output_path "$output_dir/best_of_${bestn}_batch_0_shard_${SHARD_IDX}.jsonl" \
+    --output_path "$output_dir/best_of_${bestn}_shard_${SHARD_IDX}.jsonl" \
     --dataset_path "$input_data" \
     --num_return_sequences "$bestn" \
     --shard_nums "$SHARD_NUMS" \
