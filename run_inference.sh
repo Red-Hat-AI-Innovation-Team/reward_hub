@@ -27,11 +27,14 @@ bash launch_sampling_server.sh $model_engine
 
 
 for bestn in 64; do
-    output_dir=$(dirname "$input_data")
-    mkdir -p "$output_dir"  # Ensures the directory exists
-    
-    # Get the filename with extension
     filename_with_extension=$(basename "$input_data")
+
+    # Combining the directory path and the new subdirectory name
+    output_dir=$(dirname "$input_data")/$filename_with_extension
+
+    # Ensures the directory exists by creating it if it doesn't
+    mkdir -p "$output_dir"
+
 
     # Remove the .jsonl extension
     filename="${filename_with_extension%.jsonl}"
