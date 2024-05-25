@@ -22,7 +22,7 @@ for bestn in 64; do
     --ref_model="$ref_model" \
     --num_threads 1 \
     --base_port 8020 \
-    --batch_size=8 \
+    --batch_size=4 \
     --pref_sets $input_data
     echo $!
 done
