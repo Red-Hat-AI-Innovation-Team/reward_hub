@@ -174,6 +174,7 @@ def load_simple_dataset(
     tokenizer: PreTrainedTokenizer = None,
     logger: logging.Logger = None,
     keep_columns: List[str] = ["text", "id"],
+    max_prompt_length=800,
 ) -> Dataset:
     """
     Loads either the core eval set for HERM or the existing preference data test sets.
@@ -196,28 +197,16 @@ def load_simple_dataset(
     # assert either conv is passed or tokenizer has chat_template
     assert conv is not None or usable_tokenizer
 
-    if usable_tokenizer:
-        if logger is not None:
-            logger.info("*** Preparing dataset with HF Transformers ***")
-        # docs https://huggingface.co/docs/transformers/main/en/chat_templating
-        dataset = raw_dataset.map(
-            prepare_dialogue_from_tokenizer_simple,
-            fn_kwargs={"tokenizer": tokenizer},
-            num_proc=8,
-            load_from_cache_file=False,
-        )
 
-    # else use FastChat to get chat template
-    else:
-        if logger is not None:
-            logger.info("*** Preparing dataset with FastChat ***")
-        dataset = raw_dataset.map(
-            prepare_dialogue_simple,
-            fn_kwargs={"dialogue_template": conv},
-            num_proc=8,  # using >1 process causes issues with re-assigning prompt in example
-            load_from_cache_file=False,
-        )
-
+    if logger is not None:
+        logger.info("*** Preparing dataset with HF Transformers ***")
+    # docs https://huggingface.co/docs/transformers/main/en/chat_templating
+    dataset = raw_dataset.map(
+        prepare_dialogue_from_tokenizer_simple,
+        fn_kwargs={"tokenizer": tokenizer, "max_prompt_length":max_prompt_length},
+        num_proc=8,
+        load_from_cache_file=False,
+    )
 
     # remove columns if set and not custom_dialogue_formatting
     all_cols = dataset.column_names
@@ -227,9 +216,26 @@ def load_simple_dataset(
 
 
 
+def truncate_prompt(tokenizer, prompt, max_prompt_length=2048, truncate_method="middle"):
+    tokens = tokenizer.encode(prompt)
+    if len(tokens) <= max_prompt_length:
+        return prompt
+
+    if truncate_method == "middle":
+        keep_tokens = int(max_prompt_length//2)
+        truncated_tokens = tokens[:keep_tokens] + tokens[-keep_tokens:]
+    elif truncate_method == "keep_left":
+        truncated_tokens = tokens[:max_prompt_length]
+    elif truncate_method == "keep_right":
+        truncated_tokens == tokens[-max_prompt_length:]
+
+    return tokenizer.decode(truncated_tokens)
+
+
 def prepare_dialogue_from_tokenizer_simple(
     example: Dict[str, Any],
     tokenizer: PreTrainedTokenizer,
+    max_prompt_length=800,
 ) -> Dict[str, Any]:
     if all(k in example.keys() for k in ["response"]):
         # multi turn
@@ -252,41 +258,24 @@ def prepare_dialogue_from_tokenizer_simple(
                 tokenize=False,
             )
 
+            temp_prompt = truncate_prompt(tokenizer, temp_prompt, max_prompt_length=max_prompt_length)
+            
             # end with chosen/rejected
             messages.append({"role": "assistant", "content": example["response"]})
-            example["formatted_output"] = tokenizer.apply_chat_template(
-                messages,
-                tokenize=False,
-            )
+            example["formatted_output"] = temp_prompt + example["response"] + tokenizer.eos_token
 
             example["prompt"] = temp_prompt
         # single turn
         else:
             # needed for DPO
-            messages = [
-                {"role": "user", "content": example["prompt"]},
-            ]
-            temp_prompt = tokenizer.apply_chat_template(
-                messages,
-                tokenize=False,
-            )
-
-            messages = [
-                {"role": "user", "content": example["prompt"]},
-                {"role": "assistant", "content": example["response"]},
-            ]
-            example["formatted_output"] = tokenizer.apply_chat_template(
-                messages,
-                tokenize=False,
-            )
-            
-            example["prompt"] = temp_prompt
+            raise Exception("prompt must be a list of content")
     else:
         raise ValueError(
             "Could not format example as dialogue for `rm` task!"
             f"Require `[response]` keys but found {list(example.keys())}"
         )
     return example
+
 
 
 def prepare_dialogue_simple(

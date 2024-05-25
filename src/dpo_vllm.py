@@ -13,7 +13,7 @@ class DPOInferenceVLLM:
         self.engine = VLLM()
         self.tokenizer = tokenizer
 
-    def truncate_prompt(self, prompt, max_prompt_length=2048, truncate_method="middle"):
+    def truncate_prompt(self, prompt, max_prompt_length=2048, truncate_method="keep_right"):
         tokens = self.tokenizer.encode(prompt)
         if len(tokens) <= max_prompt_length:
             return prompt
@@ -21,9 +21,9 @@ class DPOInferenceVLLM:
         if truncate_method == "middle":
             keep_tokens = int(max_prompt_length//2)
             truncated_tokens = tokens[:keep_tokens] + tokens[-keep_tokens:]
-        elif truncate_method == "left":
+        elif truncate_method == "keep_left":
             truncated_tokens = tokens[:max_prompt_length]
-        elif truncate_method == "right":
+        elif truncate_method == "keep_right":
             truncated_tokens == tokens[-max_prompt_length:]
 
         return self.tokenizer.decode(truncated_tokens)
@@ -143,13 +143,13 @@ class DPOInferenceVLLM:
                 77
             ]
         """
-        chosen_batch, prompt_batch = [ex["formatted_output"] for ex in batch], [self.truncate_prompt(ex["prompt"], max_prompt_length=1500) for ex in batch]
+        chosen_batch, prompt_batch = [ex["formatted_output"] for ex in batch], [ex["prompt"] for ex in batch]
 
         # set a very high truncation threshold for both prompt and output
         # TODO: the current truncation is fixed; modify in the future;
         # Reward annotation in the 2500 range should be enough
-        prompt_batch = [self.truncate_prompt(x , max_prompt_length=2000) for x in prompt_batch]
-        chosen_batch = [self.truncate_prompt(x , max_prompt_length=2500) for x in chosen_batch]
+        # prompt_batch = [self.truncate_prompt(x , max_prompt_length=800) for x in prompt_batch]
+        # chosen_batch = [self.truncate_prompt(x , max_prompt_length=1000) for x in chosen_batch]
 
         tokenized_prompt_batch = [self.tokenizer.encode(ex) for ex in prompt_batch]
 
