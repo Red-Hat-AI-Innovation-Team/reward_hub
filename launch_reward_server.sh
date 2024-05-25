@@ -40,10 +40,9 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 python -u -m vllm.entrypoints.openai.api_server \
        --model $pref_model \
        --port 8020 \
        --tensor-parallel-size 4 \
-       --load-format auto \
-       --download-dir /new_data/hf_cache > logs/server_0.log 2>&1 &
+       --load-format auto > logs/server_0.log 2>&1 &
 
-sleep 1
+sleep 10
 # Start monitoring each server log
 check_success "logs/server_0.log" &
 pid_array+=($!)  # Save the PID of the check_success process
@@ -55,8 +54,7 @@ CUDA_VISIBLE_DEVICES=4,5,6,7 python -u -m vllm.entrypoints.openai.api_server \
        --model $ref_model \
        --port 8021 \
        --tensor-parallel-size 4 \
-       --load-format auto \
-       --download-dir /new_data/hf_cache > logs/server_1.log 2>&1 &
+       --load-format auto > logs/server_1.log 2>&1 &
 
 sleep 1
 # Start monitoring each server log
