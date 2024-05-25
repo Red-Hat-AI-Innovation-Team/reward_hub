@@ -10,6 +10,8 @@ raw_data = "/dccstor/gxamr/linux-386/llm-alignment/preference-generator/uniform_
 raw_data = "/new_data/gx/synthetic_preference/uniform_sample_dataset_30k_best_of_64/mistralai/Mixtral-8x7B-Instruct-v0.1/bon_sampling_data_split_0.jsonl-rewards.jsonl"
 raw_data1 = "/new_data/gx/synthetic_preference/uniform_sample_dataset_30k_best_of_64/mistralai/Mixtral-8x7B-Instruct-v0.1/bon_sampling_data_split_1.jsonl-rewards.jsonl"
 
+raw_data_dir = "/new_data/gx/synthetic_preference/merlinite_RL_batches/uniform_sample_batch0-distribute/"
+
 def read_jsonl(path):
     data = []
     with open(path, 'r') as file:
@@ -17,7 +19,16 @@ def read_jsonl(path):
             data.append(json.loads(row))
     return data
 
-def load_and_format_rs(data_path, data_path2=None):
+def read_jsonl_dir(data_dir):
+    data = []
+    for filename in os.listdir(data_dir):
+        if filename.startswith('best_of_64_distribute_shard') and filename.endswith('.jsonl-rewards.jsonl'):
+            path = os.path.join(data_dir, filename)
+            data.extend(read_jsonl(path))
+    return data
+
+
+def load_and_format_rs(data_dir, model_name="/mistralai/Mixtral-8x7B-Instruct-v0.1"):
     """
     Raw data formats:
     dict_keys(['target_output', 'dataset', 'group', 'output', 'truncated_prompt', 'prompt', 'decoder_name_or_path', 'sample_mode', 'best_of_n_sample', 'target_is_bestn', 'output_reward_scores'])
@@ -25,10 +36,7 @@ def load_and_format_rs(data_path, data_path2=None):
     Args:
         data_path (_type_): _description_
     """
-    
-    annotations = read_jsonl(data_path)
-    if data_path2:
-        annotations.extend(read_jsonl(data_path2))
+    annotations = read_jsonl_dir(os.join(data_dir,model_name) )
 
     overlap = sum([ex["target_is_bestn"] for ex in annotations])
     # I should filter one words solutions/or is it math that I'm more concerned with. 
@@ -82,6 +90,10 @@ def load_and_format_rs(data_path, data_path2=None):
         best_sample_ls.append(best_sample)
         best_merlinite_sample_ls.append(best_merlinite_sample)
     
+    print_RS_stats(best_sample_ls, "best_abs_ls")
+    
+    print_RS_stats(best_merlinite_sample_ls, "best_model_ls")
+    
     return best_sample_ls, best_merlinite_sample_ls
 
 
@@ -134,7 +146,16 @@ def print_DPO_stats(sample_ls, ds_name):
     print("#"*10 + " "*3 + "rejected split" +  " "*3 + "#"*10)
     get_statistics([ex['rejected'][-1]['content'] for ex in sample_ls])
 
-def load_and_format_dpo(data_path, data_path2=None):
+
+def print_RS_stats(sample_ls, ds_name):
+    
+    print("#"*10 + " "*3 + ds_name +  " "*3 + "#"*10)
+    
+    get_statistics([ex['messages'][-1]['content'] for ex in sample_ls])
+
+
+
+def load_and_format_dpo(data_dir, model_name="/mistralai/Mixtral-8x7B-Instruct-v0.1"):
     
     """
     Raw data formats:
@@ -156,9 +177,7 @@ def load_and_format_dpo(data_path, data_path2=None):
         
     """
     
-    annotations = read_jsonl(data_path)
-    if data_path2:
-        annotations.extend(read_jsonl(data_path2))
+    annotations = read_jsonl_dir(os.join(data_dir,model_name) )
     
     
     overlap = sum([ex["target_is_bestn"] for ex in annotations])
@@ -236,29 +255,31 @@ def load_and_format_dpo(data_path, data_path2=None):
 if __name__ == "__main__":
     
     # ## Here it saves data for Rejection Sampling
-    # best_sample_ls, best_merlinite_sample_ls = load_and_format_rs(raw_data,raw_data1)
-    # breakpoint()
-    # prefix = "/new_data/gx/synthetic_preference/uniform_sample_dataset_30k_best_of_64/may15_30k_batch/"
-    # # prefix = "./may15_30k_batch/"
-    # save_as_hf_dataset(best_sample_ls, f"{prefix}/abs_best_rs")
-    # save_as_jsonl(best_sample_ls, f"{prefix}/abs_best_rs.jsonl")
-    # save_as_hf_dataset(best_merlinite_sample_ls, f"{prefix}/model_best_rs")
-    # save_as_jsonl(best_merlinite_sample_ls, f"{prefix}/model_best_rs.jsonl")
+    best_sample_ls, best_merlinite_sample_ls = load_and_format_rs(raw_data_dir)
+    breakpoint()
+    
+    prefix = raw_data_dir
+    # prefix = "./may15_30k_batch/"
+    save_as_hf_dataset(best_sample_ls, f"{prefix}/abs_best_rs")
+    save_as_jsonl(best_sample_ls, f"{prefix}/abs_best_rs.jsonl")
+    breakpoint()
+    save_as_hf_dataset(best_merlinite_sample_ls, f"{prefix}/model_best_rs")
+    save_as_jsonl(best_merlinite_sample_ls, f"{prefix}/model_best_rs.jsonl")
 
 
     ## Here it saves data for DPO training
     
-    best_sample_ls, best_merlinite_sample_ls = load_and_format_dpo(raw_data,raw_data1)
-    breakpoint()
-    print_DPO_stats(best_sample_ls, "best_sample_ls")
+    # best_sample_ls, best_merlinite_sample_ls = load_and_format_dpo(raw_data,raw_data1)
+    # breakpoint()
+    # print_DPO_stats(best_sample_ls, "best_sample_ls")
     
     
-    print_DPO_stats(best_merlinite_sample_ls, "best_merlinite_sample_ls")
+    # print_DPO_stats(best_merlinite_sample_ls, "best_merlinite_sample_ls")
     
-    breakpoint()
-    prefix = "/new_data/gx/synthetic_preference/uniform_sample_dataset_30k_best_of_64/may15_30k_batch/"
-    # prefix = "./may15_30k_batch/"
-    save_as_hf_dataset(best_sample_ls, f"{prefix}/abs_best_dpo")
-    save_as_jsonl(best_sample_ls, f"{prefix}/abs_best_dpo.jsonl")
-    save_as_hf_dataset(best_merlinite_sample_ls, f"{prefix}/model_best_dpo")
-    save_as_jsonl(best_merlinite_sample_ls, f"{prefix}/model_best_dpo.jsonl")
+    # breakpoint()
+    # prefix = "/new_data/gx/synthetic_preference/uniform_sample_dataset_30k_best_of_64/may15_30k_batch/"
+    # # prefix = "./may15_30k_batch/"
+    # save_as_hf_dataset(best_sample_ls, f"{prefix}/abs_best_dpo")
+    # save_as_jsonl(best_sample_ls, f"{prefix}/abs_best_dpo.jsonl")
+    # save_as_hf_dataset(best_merlinite_sample_ls, f"{prefix}/model_best_dpo")
+    # save_as_jsonl(best_merlinite_sample_ls, f"{prefix}/model_best_dpo.jsonl")
