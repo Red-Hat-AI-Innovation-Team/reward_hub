@@ -28,7 +28,7 @@ def read_jsonl_dir(data_dir):
     return data
 
 
-def load_and_format_rs(data_dir, model_name="/mistralai/Mixtral-8x7B-Instruct-v0.1"):
+def load_and_format_rs(data_dir, model_name="mistralai/Mixtral-8x7B-Instruct-v0.1"):
     """
     Raw data formats:
     dict_keys(['target_output', 'dataset', 'group', 'output', 'truncated_prompt', 'prompt', 'decoder_name_or_path', 'sample_mode', 'best_of_n_sample', 'target_is_bestn', 'output_reward_scores'])
@@ -36,13 +36,17 @@ def load_and_format_rs(data_dir, model_name="/mistralai/Mixtral-8x7B-Instruct-v0
     Args:
         data_path (_type_): _description_
     """
-    annotations = read_jsonl_dir(os.join(data_dir,model_name) )
+    annotations = read_jsonl_dir(os.path.join(data_dir, model_name) )
 
     overlap = sum([ex["target_is_bestn"] for ex in annotations])
     # I should filter one words solutions/or is it math that I'm more concerned with. 
     print("overlap rate between best-of-64 and Mixtral output: ", overlap/len(annotations))
 
+    non_overlap = [ex for ex in annotations if not ex["target_is_bestn"]]
     
+    breakpoint()
+
+    dummy_score = 0
     best_sample_ls, best_merlinite_sample_ls = [], []
     for instance in annotations:
         msg = convert_to_json_format(instance["prompt"], append_system=True)
@@ -87,8 +91,15 @@ def load_and_format_rs(data_dir, model_name="/mistralai/Mixtral-8x7B-Instruct-v0
             "dataset":"reward:Mixtral log-ratio",
             "metadata":"{\"num_turns\": 1}"
         }
+        
+        if max(instance["output_reward_scores"]) == min(instance["output_reward_scores"]):
+            dummy_score +=1
+            continue
+        
         best_sample_ls.append(best_sample)
         best_merlinite_sample_ls.append(best_merlinite_sample)
+    
+    print("Number of equal scores/dummy scores: ", dummy_score)
     
     print_RS_stats(best_sample_ls, "best_abs_ls")
     
@@ -155,7 +166,7 @@ def print_RS_stats(sample_ls, ds_name):
 
 
 
-def load_and_format_dpo(data_dir, model_name="/mistralai/Mixtral-8x7B-Instruct-v0.1"):
+def load_and_format_dpo(data_dir, model_name="mistralai/Mixtral-8x7B-Instruct-v0.1"):
     
     """
     Raw data formats:
@@ -177,13 +188,16 @@ def load_and_format_dpo(data_dir, model_name="/mistralai/Mixtral-8x7B-Instruct-v
         
     """
     
-    annotations = read_jsonl_dir(os.join(data_dir,model_name) )
+    annotations = read_jsonl_dir(os.path.join(data_dir,model_name) )
     
     
     overlap = sum([ex["target_is_bestn"] for ex in annotations])
     # I should filter one words solutions/or is it math that I'm more concerned with. 
     print("overlap rate between best-of-64 and Mixtral output: ", overlap/len(annotations))
 
+    non_overlap = [ex for ex in annotations if not ex["target_is_bestn"]]
+    
+    breakpoint()
     
     best_sample_ls, best_merlinite_sample_ls = [], []
     for instance in annotations:
