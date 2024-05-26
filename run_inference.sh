@@ -3,8 +3,9 @@
 # round1
 # model_engine="/new_data/gx/rejection_sampling_checkpoints/merlinite-deep-serenity-19/hf_format/samples_187264"
 # round2-sampling
-model_engine="/new_data/gx/iterative_rejection_sampling_checkpoints/round1/merlinite-summer-armadillo-24/hf_format/samples_157440"
-
+# model_engine="/new_data/gx/iterative_rejection_sampling_checkpoints/round1/merlinite-summer-armadillo-24/hf_format/samples_157440"
+# round3-sampling
+model_engine="/new_data/gx/iterative_rejection_sampling_checkpoints/round2/merlinite-helpful-capybara-25/hf_format/samples_68880"
 
 
 # Define the reward comparison models
@@ -16,10 +17,10 @@ ref_model="mistralai/Mixtral-8x7B-v0.1"
 # input_data="/dccstor/gxamr/linux-386/llm-alignment/merlinite_RL_batches/uniform_sample_batch0.jsonl"
 
 # round-1, batch0
-input_data="/new_data/gx/synthetic_preference/merlinite_RL_batches/uniform_sample_batch1.jsonl"
+# input_data="/new_data/gx/synthetic_preference/merlinite_RL_batches/uniform_sample_batch1.jsonl"
 
 # round-2, batch1
-
+input_data="/new_data/gx/synthetic_preference/merlinite_RL_batches/uniform_sample_batch2.jsonl"
 
 # Assign the first argument to SHARD_NUMS with a default of 1 if not provided
 SHARD_NUMS=${1:-1}
@@ -29,6 +30,8 @@ SHARD_IDX=${2:-0}
 
 echo "Shard nums is: $SHARD_NUMS"
 echo "Shard index is: $SHARD_IDX"
+
+echo "Input data is: $input_data"
 
 bash launch_sampling_server.sh $model_engine
 
