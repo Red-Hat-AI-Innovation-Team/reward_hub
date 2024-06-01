@@ -5,8 +5,10 @@
 # round2-sampling
 # model_engine="/new_data/gx/iterative_rejection_sampling_checkpoints/round1/merlinite-summer-armadillo-24/hf_format/samples_157440"
 # round3-sampling
-model_engine="/new_data/gx/iterative_rejection_sampling_checkpoints/round2/merlinite-helpful-capybara-25/hf_format/samples_68880"
+# model_engine="/new_data/gx/iterative_rejection_sampling_checkpoints/round2/merlinite-helpful-capybara-25/hf_format/samples_68880"
 
+# granite-sampling
+model_engine="instructlab/granite-7b-lab"
 
 # Define the reward comparison models
 pref_model="mistralai/Mixtral-8x7B-Instruct-v0.1"
@@ -20,7 +22,11 @@ ref_model="mistralai/Mixtral-8x7B-v0.1"
 # input_data="/new_data/gx/synthetic_preference/merlinite_RL_batches/uniform_sample_batch1.jsonl"
 
 # round-2, batch1
-input_data="/new_data/gx/synthetic_preference/merlinite_RL_batches/uniform_sample_batch2.jsonl"
+# input_data="/new_data/gx/synthetic_preference/merlinite_RL_batches/uniform_sample_batch2.jsonl"
+
+# granite round1
+input_data="/new_data/gx/synthetic_preference/granite_RL_batches/uniform_sample_batch0.jsonl"
+
 
 # Assign the first argument to SHARD_NUMS with a default of 1 if not provided
 SHARD_NUMS=${1:-1}
