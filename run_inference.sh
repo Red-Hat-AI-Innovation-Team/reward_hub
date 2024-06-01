@@ -56,6 +56,7 @@ for bestn in 64; do
     --output_path "$output_dir/best_of_${bestn}_distribute_shard_${SHARD_IDX}.jsonl" \
     --dataset_path "$input_data" \
     --num_return_sequences "$bestn" \
+    --vllm_batch_size 20 \
     --shard_nums "$SHARD_NUMS" \
     --shard_idx "$SHARD_IDX"
     # Echo the process ID of the last background process
