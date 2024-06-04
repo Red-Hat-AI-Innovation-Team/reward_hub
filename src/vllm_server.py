@@ -69,12 +69,14 @@ class VLLM:
             for j in range(tries):  # 10 retries
                 try:
                     response = requests.post(endpoint, json=body, headers=headers)
+                    jres = response.json()
+                    assert "choices" in jres, "invalid outputs, resubmit request {jres}"
                 except Exception as e:
                     if j < tries - 1:
-                        print("Timeout connection to vLLM, waiting 1min before retry")
+                        print("Timeout connection to vLLM, waiting 5 secs before retry")
                         print(e)
-                        print("Prompts Lengths:")
-                        time.sleep(60)
+                        print("Prompts Lengths:", len(body["prompt"].split()))
+                        time.sleep(5)
                         continue
                     else:
                         raise e
