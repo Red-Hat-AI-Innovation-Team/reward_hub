@@ -25,7 +25,7 @@ ref_model="mistralai/Mixtral-8x7B-v0.1"
 # input_data="/new_data/gx/synthetic_preference/merlinite_RL_batches/uniform_sample_batch2.jsonl"
 
 # granite round1
-input_data="/new_data/gx/synthetic_preference/granite_RL_batches/uniform_sample_batch_pre.jsonl"
+input_data="/new_data/gx/synthetic_preference/granite_RL_batches_new/uniform_sample_batch0.jsonl"
 
 
 # Assign the first argument to SHARD_NUMS with a default of 1 if not provided
