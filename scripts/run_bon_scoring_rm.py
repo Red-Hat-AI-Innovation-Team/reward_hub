@@ -83,11 +83,12 @@ def load_ibm_bon_data(data_path, debug=False):
     data = read_jsonl(data_path)
     if debug:
         data = data[:10]
-
-    # for instance in data:
-    #     if instance["target_output"]:
-    #         instance["output"] = [instance["target_output"]] + instance["output"]
-
+    
+    for instance in data:
+        if instance["target_output"]:
+            instance["output"] = [instance["target_output"]] + instance["output"]
+        else:
+            instance["output"] = ["dummy output"] + instance["output"]
     flattened_data = []
     id=0
     for instance in data:
@@ -100,6 +101,7 @@ def load_ibm_bon_data(data_path, debug=False):
                 "id":id,
                 "original_prompt": prompt,
                 "prompt": raw_prompt,
+                "messages": raw_prompt + [{'role': 'assistant', 'content': output_candidates[can_idx]}],
                 "response": output_candidates[can_idx],
                 "subset": "custom"
             }
@@ -108,8 +110,6 @@ def load_ibm_bon_data(data_path, debug=False):
 
     flattened_data = list_to_dataset(flattened_data)
     input_data = list_to_dataset(data)
-    
-    assert len(flattened_data)%len(input_data) == 0
     return flattened_data, input_data
 
 
@@ -195,7 +195,7 @@ def reward_annotation_single(pref_port, ref_port, dataset, args):
     ############################
     # Load reward model pipeline
     ############################
-    
+
     BATCH_SIZE = args.batch_size
     model = {
         "model_name": args.model,
@@ -310,44 +310,51 @@ def main():
         ref_free = False
         logger.info(f"Running DPO with reference model {args.ref_model}")
 
-    ############################
-    # Multi-threading to leverage multiple threads to increase throughput
-    ############################
-    if not args.debug:
-        manager = Manager()
-        results = manager.dict()
-        processes = []
-        chunked_data_dict = {}
-        base_port = args.base_port
-        gpu_chunk_size = int(len(simple_dataset)/args.num_threads)+1
+    if not args.ref_model:
+        from src.models import ArmoRMPipeline
+        armopipeline = ArmoRMPipeline(args.model, device=0)
+        input_data = [instance['messages'] for instance in custom_dataset]
+        final_scores, _ = armopipeline(input_data)
 
-        for thread_idx in range(args.num_threads):
-
-            start_idx = thread_idx * gpu_chunk_size
-            end_idx = min(len(simple_dataset), start_idx + gpu_chunk_size)
-            thread_dataset = simple_dataset.select(range(start_idx, end_idx))
-            chunked_data_dict[thread_idx] = thread_dataset
-            pref_port = base_port
-            ref_port = base_port + 1
-            base_port+=2
-            # currently, it's sequential, needs to make it distributed.
-            # only apply on non-empty cases
-            if thread_dataset and len(thread_dataset)>0:
-                processes.append(
-                    Process(target=reward_annotation, args=(pref_port, ref_port, chunked_data_dict, args, thread_idx, results)),
-                )
-        for process in processes:
-            process.start()
-
-        for process in processes:
-            process.join()
-
-        final_scores = []
-        for thread_idx in range(args.num_threads):
-            if thread_idx in results and results[thread_idx]:
-                final_scores.extend(results[thread_idx])
     else:
-        final_scores = reward_annotation_single(args.base_port, args.base_port + 1, simple_dataset, args)
+        ############################
+        # Multi-threading to leverage multiple threads to increase throughput
+        ############################
+        if not args.debug:
+            manager = Manager()
+            results = manager.dict()
+            processes = []
+            chunked_data_dict = {}
+            base_port = args.base_port
+            gpu_chunk_size = int(len(simple_dataset)/args.num_threads)+1
+
+            for thread_idx in range(args.num_threads):
+
+                start_idx = thread_idx * gpu_chunk_size
+                end_idx = min(len(simple_dataset), start_idx + gpu_chunk_size)
+                thread_dataset = simple_dataset.select(range(start_idx, end_idx))
+                chunked_data_dict[thread_idx] = thread_dataset
+                pref_port = base_port
+                ref_port = base_port + 1
+                base_port+=2
+                # currently, it's sequential, needs to make it distributed.
+                # only apply on non-empty cases
+                if thread_dataset and len(thread_dataset)>0:
+                    processes.append(
+                        Process(target=reward_annotation, args=(pref_port, ref_port, chunked_data_dict, args, thread_idx, results)),
+                    )
+            for process in processes:
+                process.start()
+
+            for process in processes:
+                process.join()
+
+            final_scores = []
+            for thread_idx in range(args.num_threads):
+                if thread_idx in results and results[thread_idx]:
+                    final_scores.extend(results[thread_idx])
+        else:
+            final_scores = reward_annotation_single(args.base_port, args.base_port + 1, simple_dataset, args)
 
 
     ############################
@@ -359,7 +366,7 @@ def main():
     best_of_n_samples, rewards_ls, samples_to_reward_dicts = [], [], []
 
     best_of_n = int(len(raw_out_dataset)/len(input_dataset))
-    print("best-of-n is", best_of_n)
+
 
     for i, instance in enumerate(input_dataset):
         start_index, end_index = i*best_of_n, i*best_of_n+best_of_n
@@ -370,12 +377,10 @@ def main():
         
         # saninty check
         for in_idx, ex in enumerate(mapped_outputs):
-            if ex["original_prompt"] != instance["prompt"]:
-                breakpoint()
-            # assert ex["original_prompt"] == instance["prompt"], "original prompt and flattened prompt don't match"
+            assert ex["original_prompt"] == instance["prompt"], "original prompt and flattened prompt don't match"
 
             # this is somewhere that I'm should do another sanity check
-            # assert instance["output"][in_idx] == ex["response"], "original order is being disrupted"
+            assert instance["output"][in_idx] == ex["response"], "original order is being disrupted"
             reward_dict[ex["response"]] = ex["results"]
             per_instance_rewards.append(ex["results"])
 

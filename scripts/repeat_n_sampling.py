@@ -173,7 +173,7 @@ def data_distribution_inference(
     shard_idx=0,
 ):
     if "mt_bench" in dataset_path:
-        list_dict_data = load_best_of_n_mt_bench("questions.jsonl", "merlinite-model-answer3/merlinite-7b-4.jsonl")
+        list_dict_data = load_best_of_n_mt_bench("questions.jsonl", "granite_model_answer/merlinite-granite-7b-lab-4.jsonl")
     else:
         list_dict_data = read_input_jsonl(dataset_path)
 
