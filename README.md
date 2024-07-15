@@ -42,3 +42,5 @@ Single-thread testing:
 run_annotate_test.sh input_data_path
 ```
 
+### Support hf-reward models
+Provide support for huggingface classification reward models. 
