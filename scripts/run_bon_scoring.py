@@ -121,6 +121,7 @@ def get_args():
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, required=True, help="path to model")
+    parser.add_argument("--model_type", type=str, default="dpo", help="type of model (dpo or classifier)")
     parser.add_argument("--save_dir", type=str,  default=None, help="directory to save results")
     parser.add_argument("--ref_model", type=str, default=None, help="path to model")
     parser.add_argument(
@@ -133,7 +134,7 @@ def get_args():
     parser.add_argument("--num_threads", type=int, default=1, help="how many threads to submit")
     parser.add_argument("--base_port", type=int, default=8020, help="the base_port to infer other ports to make API calls for")
     parser.add_argument(
-        "--pref_sets",
+        "--input_path",
         type=str,
         default=None,
         help="Specify the preference sets file"
@@ -233,6 +234,13 @@ def reward_annotation_single(pref_port, ref_port, dataset, args):
         all_scores += scores
     return all_scores
 
+def singular_classifier_thread(model_name, device_id, chunked_data_dict, results):
+    chunk_data_hf = chunked_data_dict[device_id]
+    chunk_data = [instance['messages'] for instance in chunk_data_hf]
+    from src.models import ArmoRMPipeline
+    armopipeline = ArmoRMPipeline(model_name, device=device_id)
+    chunk_scores, _ = armopipeline(chunk_data)
+    results[device_id] = chunk_scores
 
 def main():
     args = get_args()
@@ -257,32 +265,30 @@ def main():
     if args.trust_remote_code:
         logger.info("Loading model with Trust Remote Code")
 
-    if args.model in DPO_MODEL_CONFIG:
-        config = DPO_MODEL_CONFIG[args.model]
+    if args.model_type == "dpo":
+        if args.model in DPO_MODEL_CONFIG:
+            config = DPO_MODEL_CONFIG[args.model]
+        else:
+            config = DPO_MODEL_CONFIG["default"]
+        logger.info(f"Using dpo model config: {config}")
+        assert args.model != args.ref_model, "policy and reference model should be different"
     else:
-        config = DPO_MODEL_CONFIG["default"]
-    logger.info(f"Using dpo model config: {config}")
+        logger.info(f"Using a sequence classifier reward model: {args.model}")
 
-    tokenizer_builder = config["tokenizer_builder"]
-
-    assert args.model != args.ref_model, "policy and reference model should be different"
+   
     # load chat template
     chat_template = args.chat_template
     conv = get_conv_template(chat_template)
-
 
     ############################
     # Load dataset
     ############################
     logger.info("*** Load dataset ***")
     tokenizer_path = args.tokenizer if args.tokenizer else args.model
-    tokenizer = tokenizer_builder(tokenizer_path, trust_remote_code=args.trust_remote_code)
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=args.trust_remote_code)
     tokenizer.pad_token = tokenizer.eos_token
 
-
-    # The custom dataset must be made in to messages format:
-    # [{content:  , role:  } ]
-    custom_dataset, input_dataset = load_ibm_bon_data(args.pref_sets, debug=args.debug)
+    custom_dataset, input_dataset = load_ibm_bon_data(args.input_path, debug=args.debug)
 
     # modify the load_eval_dataset to be handling single column outputs. 
     simple_dataset = load_simple_dataset(
@@ -290,31 +296,26 @@ def main():
         conv=conv,
         tokenizer=tokenizer,
         logger=logger,
-        keep_columns=["formatted_output", "prompt", "original_prompt", "response"],
+        keep_columns=["formatted_output", "prompt", "original_prompt", "response", "messages"],
     )
 
     # save_dir
     if not args.save_dir:
         # write sth when dataset name is not available
-        if args.pref_sets:
-            save_dir = os.path.dirname(args.pref_sets) + "/" + args.model
+        if args.input_path:
+            save_dir = os.path.dirname(args.input_path) + "/" + args.model
         else:
             save_dir = "./" + args.model
     else:
         save_dir = args.save_dir
     logger.info(f"Results to be saved to the following directory: {save_dir}")
 
-    # define reference free
-    if args.ref_model is None:
-        ref_free = True
-        logger.info("Running reference free DPO - no reference model provided")
-    else:
-        ref_free = False
-        logger.info(f"Running DPO with reference model {args.ref_model}")
-
     ############################
     # Multi-threading to leverage multiple threads to increase throughput
     ############################
+    if args.model_type != "dpo":
+        logger.info("Using a sequence classifier reward model")
+
     if not args.debug:
         manager = Manager()
         results = manager.dict()
@@ -322,7 +323,7 @@ def main():
         chunked_data_dict = {}
         base_port = args.base_port
         gpu_chunk_size = int(len(simple_dataset)/args.num_threads)+1
-
+  
         for thread_idx in range(args.num_threads):
 
             start_idx = thread_idx * gpu_chunk_size
@@ -332,12 +333,17 @@ def main():
             pref_port = base_port
             ref_port = base_port + 1
             base_port+=2
-            # currently, it's sequential, needs to make it distributed.
-            # only apply on non-empty cases
+
             if thread_dataset and len(thread_dataset)>0:
-                processes.append(
-                    Process(target=reward_annotation, args=(pref_port, ref_port, chunked_data_dict, args, thread_idx, results)),
-                )
+                if args.model_type == "dpo":
+                    processes.append(
+                        Process(target=reward_annotation, args=(pref_port, ref_port, chunked_data_dict, args, thread_idx, results)),
+                    )
+                else:
+                    processes.append(
+                        Process(target=singular_classifier_thread, args=(args.model, thread_idx, chunked_data_dict, results)),
+                    )
+     
         for process in processes:
             process.start()
 
@@ -349,7 +355,13 @@ def main():
             if thread_idx in results and results[thread_idx]:
                 final_scores.extend(results[thread_idx])
     else:
-        final_scores = reward_annotation_single(args.base_port, args.base_port + 1, simple_dataset, args)
+        if args.model_type == "dpo":
+            final_scores = reward_annotation_single(args.base_port, args.base_port + 1, simple_dataset, args)
+        else:
+            from src.models import ArmoRMPipeline
+            input_data = [instance['messages'] for instance in simple_dataset]
+            armopipeline = ArmoRMPipeline(args.model, device=0)
+            final_scores, _ = armopipeline(input_data)
 
 
     ############################
@@ -393,7 +405,7 @@ def main():
     input_dataset = input_dataset.add_column("output_reward_scores", rewards_ls)
     
 
-    output_filename = os.path.basename(args.pref_sets)+"-rewards.jsonl"
+    output_filename = os.path.basename(args.input_path)+"-rewards.jsonl"
 
     output_save_path = os.path.join(save_dir, output_filename)
     input_dataset.to_json(output_save_path)
@@ -408,5 +420,6 @@ def main():
 
 if __name__ == "__main__":
     # load_ibm_bon_data("/dccstor/gxamr/linux-386/llm-alignment/preference-generator/uniform_sample_dataset_30k/best_of_64/bon_sampling_data_split_0.jsonl", debug=True)
-
+    import multiprocessing
+    multiprocessing.set_start_method('spawn')     
     main()
