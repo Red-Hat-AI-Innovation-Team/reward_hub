@@ -84,9 +84,11 @@ def load_ibm_bon_data(data_path, debug=False):
     if debug:
         data = data[:10]
 
-    # for instance in data:
-    #     if instance["target_output"]:
-    #         instance["output"] = [instance["target_output"]] + instance["output"]
+    for instance in data:
+        if instance["target_output"]:
+            instance["output"] = [instance["target_output"]] + instance["output"]
+        else:
+            instance["output"] = ["None found"] + instance["output"]
 
     flattened_data = []
     id=0
@@ -370,12 +372,10 @@ def main():
         
         # saninty check
         for in_idx, ex in enumerate(mapped_outputs):
-            if ex["original_prompt"] != instance["prompt"]:
-                breakpoint()
-            # assert ex["original_prompt"] == instance["prompt"], "original prompt and flattened prompt don't match"
+            assert ex["original_prompt"] == instance["prompt"], "original prompt and flattened prompt don't match"
 
             # this is somewhere that I'm should do another sanity check
-            # assert instance["output"][in_idx] == ex["response"], "original order is being disrupted"
+            assert instance["output"][in_idx] == ex["response"], "original order is being disrupted"
             reward_dict[ex["response"]] = ex["results"]
             per_instance_rewards.append(ex["results"])
 
