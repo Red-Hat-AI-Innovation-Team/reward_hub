@@ -42,5 +42,11 @@ Single-thread testing:
 run_annotate_test.sh input_data_path
 ```
 
-### Support hf-reward models
-Provide support for huggingface classification reward models. 
+### Support hf classifier reward models
+They are small models that can be hosted on single gpu device, no need to launch vllm for them. 
+Hosting and inference happens at multi-processing phase. 
+
+To run reward annotation, pass in the input_path as argument
+```
+bash run_annotate_classifier.sh <input_data>
+```
