@@ -1,28 +1,10 @@
 
-# Define the sampling model
-# round1
-# model_engine="/new_data/gx/rejection_sampling_checkpoints/merlinite-deep-serenity-19/hf_format/samples_187264"
-# round2-sampling
-# model_engine="/new_data/gx/iterative_rejection_sampling_checkpoints/round1/merlinite-summer-armadillo-24/hf_format/samples_157440"
-# round3-sampling
-# model_engine="/new_data/gx/iterative_rejection_sampling_checkpoints/round2/merlinite-helpful-capybara-25/hf_format/samples_68880"
-
 # granite-sampling
 model_engine="instructlab/granite-7b-lab"
 
 # Define the reward comparison models
 pref_model="mistralai/Mixtral-8x7B-Instruct-v0.1"
 ref_model="mistralai/Mixtral-8x7B-v0.1"
-
-# Define the input dataset path
-# input_data="/new_data/gx/synthetic_preference/uniform_sample_dataset_30k_best_of_64/bon_sampling_data_split_0.jsonl"
-# input_data="/dccstor/gxamr/linux-386/llm-alignment/merlinite_RL_batches/uniform_sample_batch0.jsonl"
-
-# round-1, batch0
-# input_data="/new_data/gx/synthetic_preference/merlinite_RL_batches/uniform_sample_batch1.jsonl"
-
-# round-2, batch1
-# input_data="/new_data/gx/synthetic_preference/merlinite_RL_batches/uniform_sample_batch2.jsonl"
 
 # granite round1
 input_data="/new_data/gx/synthetic_preference/granite_RL_batches_new/uniform_sample_batch0.jsonl"
@@ -33,6 +15,9 @@ SHARD_NUMS=${1:-1}
 
 # Assign the second argument to SHARD_IDX with a default of 0 if not provided
 SHARD_IDX=${2:-0}
+
+# Assign the third argument to input_data; raise an error if not provided
+input_data=${3:?"Please provide the input data path as the third argument"}
 
 echo "Shard nums is: $SHARD_NUMS"
 echo "Shard index is: $SHARD_IDX"
@@ -64,7 +49,4 @@ for bestn in 64; do
     # Echo the process ID of the last background process
     echo $!
 
-    # Run bon scoring
-    # python scripts/run_bon_scoring.py --model="$pref_model" --ref_model="$ref_model" --num_threads 2 --batch_size=4 --debug True --pref_sets $input_data > "logs/$filename.log" 2>&1 &
-    # echo $!
 done
