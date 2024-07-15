@@ -24,9 +24,13 @@ ray start --head --num-cpus=32 --num-gpus=8
 It will automatically shard data according to num_shards and the current index. 
 This is very useful for multi-node distribtued compute. 
 
-Server will be automatically launched for the job. 
+Server will be automatically launched for the job.
+
+- SHARD_NUMS is total number of shards to make of the input_data
+- SHARD_IDX is the index of shard to run inference on
+
 ```
-bash run_inference.sh SHARD_NUMS SHARD_IDX <input_data_path>
+bash run_inference.sh <input_data_path> <model_engine> SHARD_NUMS SHARD_IDX
 ```
 The expected input_data should be a jsonl file with the following format:
 ```
@@ -40,7 +44,6 @@ The expected input_data should be a jsonl file with the following format:
 # TO-DO:
 write a general dataloader for messages format, and apply tokenizer/fastchat chat_templates
 ```
-
 
 
 ### Launch reward annotation
