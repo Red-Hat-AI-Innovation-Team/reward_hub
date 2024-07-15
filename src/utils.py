@@ -201,12 +201,24 @@ def load_simple_dataset(
     if logger is not None:
         logger.info("*** Preparing dataset with HF Transformers ***")
     # docs https://huggingface.co/docs/transformers/main/en/chat_templating
-    dataset = raw_dataset.map(
-        prepare_dialogue_from_tokenizer_simple,
-        fn_kwargs={"tokenizer": tokenizer, "max_prompt_length":max_prompt_length},
-        num_proc=8,
-        load_from_cache_file=False,
-    )
+    if usable_tokenizer:
+        if logger is not None:
+            logger.info("*** Preparing dataset using tokenizer chat-template ***")
+        dataset = raw_dataset.map(
+            prepare_dialogue_from_tokenizer,
+            fn_kwargs={"tokenizer": tokenizer, "max_prompt_length":max_prompt_length},
+            num_proc=8,
+            load_from_cache_file=False,
+        )
+    elif conv is not None:
+        if logger is not None:
+            logger.info("*** Preparing dataset with FastChat ***")
+        dataset = raw_dataset.map(
+            prepare_fastchat_conv,
+            fn_kwargs={"dialogue_template": conv, "tokenizer": tokenizer, "max_prompt_length":max_prompt_length},
+            num_proc=8,
+            load_from_cache_file=False,
+        )
 
     # remove columns if set and not custom_dialogue_formatting
     all_cols = dataset.column_names
@@ -216,7 +228,7 @@ def load_simple_dataset(
 
 
 
-def truncate_prompt(tokenizer, prompt, max_prompt_length=2048, truncate_method="middle"):
+def truncate_prompt(tokenizer, prompt, max_prompt_length=2048, truncate_method="keep_right"):
     tokens = tokenizer.encode(prompt)
     if len(tokens) <= max_prompt_length:
         return prompt
@@ -227,17 +239,19 @@ def truncate_prompt(tokenizer, prompt, max_prompt_length=2048, truncate_method="
     elif truncate_method == "keep_left":
         truncated_tokens = tokens[:max_prompt_length]
     elif truncate_method == "keep_right":
-        truncated_tokens == tokens[-max_prompt_length:]
+        truncated_tokens = tokens[-max_prompt_length:]
+    else:
+        raise Exception(f"Invalid truncate method: {truncate_method}")
 
     return tokenizer.decode(truncated_tokens)
 
 
-def prepare_dialogue_from_tokenizer_simple(
+def prepare_dialogue_from_tokenizer(
     example: Dict[str, Any],
     tokenizer: PreTrainedTokenizer,
     max_prompt_length=800,
 ) -> Dict[str, Any]:
-    if all(k in example.keys() for k in ["response"]):
+    if all(k in example.keys() for k in ["prompt", "response"]):
         # multi turn
         if isinstance(example["prompt"], list) and len(example["prompt"]) > 0:
             # iterate through prompt messages, alternate user and assistant, end with example["chosen"]/rejected
@@ -253,18 +267,26 @@ def prepare_dialogue_from_tokenizer_simple(
             assert messages[-1]["role"] == "user"
 
             # required for DPO code only, otherwise discarded
-            temp_prompt = tokenizer.apply_chat_template(
+            formatted_prompt = tokenizer.apply_chat_template(
                 messages,
                 tokenize=False,
             )
 
-            temp_prompt = truncate_prompt(tokenizer, temp_prompt, max_prompt_length=max_prompt_length)
-            
+            # truncate from left would be ideal, and ensures same truncation between 
+            # prompt and output
+            formatted_prompt = truncate_prompt(tokenizer, formatted_prompt, max_prompt_length=max_prompt_length, truncate_method="keep_right")
+
             # end with chosen/rejected
             messages.append({"role": "assistant", "content": example["response"]})
-            example["formatted_output"] = temp_prompt + example["response"] + tokenizer.eos_token
+            formatted_output = tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+            )
+            formatted_output = truncate_prompt(tokenizer, formatted_output, max_prompt_length=max_prompt_length, truncate_method="keep_right")
 
-            example["prompt"] = temp_prompt
+            example["formatted_output"] = formatted_output + tokenizer.eos_token if formatted_output[-1] != tokenizer.eos_token else formatted_output
+            example["prompt"] = formatted_prompt
+            example["messages"] = messages
         # single turn
         else:
             # needed for DPO
@@ -278,12 +300,14 @@ def prepare_dialogue_from_tokenizer_simple(
 
 
 
-def prepare_dialogue_simple(
+def prepare_fastchat_conv(
     example: Dict[str, Any],
     dialogue_template: Conversation,
+    tokenizer: PreTrainedTokenizer,
+    max_prompt_length: int,
 ) -> Dict[str, Any]:
     """Format example to single- or multi-turn dialogue."""
-    if all(k in example.keys() for k in ("chosen", "rejected")):
+    if all(k in example.keys() for k in (["prompt", "response"])):
         # multi turn
         if isinstance(example["prompt"], list) and len(example["prompt"]) > 0:
             # iterate through prompt messages, alternate user and assistant, end with example["chosen"]/rejected
@@ -299,28 +323,18 @@ def prepare_dialogue_simple(
             assert dialogue_template.messages[-1][0] == dialogue_template.roles[0]
 
             # needed for DPO
-            temp_prompt = dialogue_template.get_prompt()
+            formatted_prompt = dialogue_template.get_prompt()
 
             # end with chosen/rejected
             dialogue_template.messages.append([dialogue_template.roles[1], example["response"]])
-            example["formatted_output"] = dialogue_template.get_prompt()
-            example["prompt"] = temp_prompt
-
-        # single turn
+            formatted_output = truncate_prompt(tokenizer, dialogue_template.get_prompt(), max_prompt_length=max_prompt_length, truncate_method="keep_right")
+            example["formatted_output"] = formatted_output + tokenizer.eos_token if formatted_output[-1] != tokenizer.eos_token else formatted_output
+            example["prompt"] = truncate_prompt(tokenizer, formatted_prompt, max_prompt_length=max_prompt_length, truncate_method="keep_right")
+            example["messages"] = dialogue_template.messages
         else:
-            if isinstance(example["prompt"], list):
-                example["prompt"] = example["prompt"][0]
-            dialogue_template.messages = [
-                [dialogue_template.roles[0], example["prompt"]],
-            ]
-            temp_prompt = dialogue_template.get_prompt()
-
-            dialogue_template.messages = [
-                [dialogue_template.roles[0], example["prompt"]],
-                [dialogue_template.roles[1], example["response"]],
-            ]
-            example["formatted_text"] = dialogue_template.get_prompt()
-            example["prompt"] = temp_prompt
+            # single turn
+            # needed for DPO
+            raise Exception("prompt must be a list of content")
     else:
         raise ValueError(
             "Could not format example as dialogue for `rm` task!"
