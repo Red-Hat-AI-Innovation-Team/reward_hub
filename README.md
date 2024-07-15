@@ -26,8 +26,21 @@ This is very useful for multi-node distribtued compute.
 
 Server will be automatically launched for the job. 
 ```
-bash run_inference.sh SHARD_NUMS SHARD_IDX
+bash run_inference.sh SHARD_NUMS SHARD_IDX <input_data_path>
 ```
+The expected input_data should be a jsonl file with the following format:
+```
+{
+    "formatted_input": ..,
+    "targets": ..,
+    "dataset"..,
+    "group":..,
+}
+
+# TO-DO:
+write a general dataloader for messages format, and apply tokenizer/fastchat chat_templates
+```
+
 
 
 ### Launch reward annotation
