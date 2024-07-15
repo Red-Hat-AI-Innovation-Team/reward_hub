@@ -22,6 +22,7 @@ from transformers import (
     pipeline,
 )
 
+from .armo import ArmoRMPipeline
 from .beaver import BeaverCostPipeline, BeaverPipeline, LlamaForScore
 from .openassistant import *  # noqa
 from .openbmb import LlamaRewardModel, OpenBMBPipeline

@@ -44,10 +44,10 @@ def save_as_jsonl(data, filename):
 
 import random
 
-template = "/dccstor/gxamr/linux-386/llm-alignment/preference-generator/merlinite-model-answer3/merlinite-7b-0.jsonl"
+template = "./merlinite-model-answer3/merlinite-7b-0.jsonl"
 
 def post_process_mt_file(best_of_n, model_name, random_flag=False):
-    input_file = f"./mt_bench_results/best_of_{best_of_n}/{model_name}/bon_sampling_data.jsonl-rewards.jsonl"
+    input_file = f"./mt_bench-distribute/{model_name}/best_of_{best_of_n}_distribute_shard_0.jsonl-rewards.jsonl"
 
     input_data = read_jsonl(input_file)
     output_data = read_jsonl(template)
@@ -73,14 +73,14 @@ def post_process_mt_file(best_of_n, model_name, random_flag=False):
     
     model_concise = model_name.split("/")[-1]
     if random_flag:
-        save_as_jsonl(new_output, f"./mt_results/random_of_{best_of_n}_{model_concise}.jsonl")
+        save_as_jsonl(new_output, f"..mt_results/random_of_{best_of_n}_granite.jsonl")
     else:
-        save_as_jsonl(new_output, f"./mt_results/best_of_{best_of_n}_{model_concise}.jsonl")
-    print("Successfully saved prepared output to ", f"./mt_results/best_of_{best_of_n}_{model_concise}.jsonl")
-        
+        save_as_jsonl(new_output, f"./mt_results/best_of_{best_of_n}_granite.jsonl")
+    print("Successfully saved prepared output to ", f"./mt_results/best_of_{best_of_n}_granite.jsonl")
         
 
-model_name = "mistralai/Mixtral-8x7B-Instruct-v0.1"
+
+model_name = "RLHFlow/ArmoRM-Llama3-8B-v0.1"
 
 for best_of_n in [32, 64, 128]:
     

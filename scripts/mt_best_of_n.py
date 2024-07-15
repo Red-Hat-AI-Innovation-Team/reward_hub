@@ -73,12 +73,16 @@ def load_question_file_turn1(question_file):
 
 
 def load_question_file_turn2(question_file, response_file):
+    
     question_data = read_jsonl(question_file)
+    qids = [ex['question_id'] for ex in question_data]
     response_data = read_jsonl(response_file)
+    response_data = [ex for ex in response_data if ex["question_id"] in qids]
+
     turn1_responses = [ex["choices"][0]["turns"][0] for ex in response_data]
     input_data = [
         {
-            "targets": "",
+            "targets": "none",
             "dataset":  "mt-bench",
             "group": ["second-turn"],
             "prompt": format_two_turns(ex["turns"], turn1_responses[idx]),
@@ -88,7 +92,6 @@ def load_question_file_turn2(question_file, response_file):
     ]
     return input_data
 
-
 def load_best_of_n_mt_bench(question_file, response_file):
     t1 = load_question_file_turn1(question_file)
     t2 = load_question_file_turn2(question_file, response_file)
@@ -97,6 +100,5 @@ def load_best_of_n_mt_bench(question_file, response_file):
 
 
 if __name__ == "__main__":
-    list_dict_data = load_best_of_n_mt_bench("questions.jsonl", "merlinite-model-answer3/merlinite-7b-4.jsonl")
+    list_dict_data = load_best_of_n_mt_bench("questions.jsonl", "granite_model_answer/merlinite-granite-7b-lab-4.jsonl")
     breakpoint()
-
