@@ -167,7 +167,7 @@ def data_distribution_inference(
     vllm_batch_size=40,
     max_prompt_length=2048,
     truncate_method="middle",
-    num_gpus=None,
+    num_threads=None,
     shuffle=False,
     shard_nums=1,
     shard_idx=0,
@@ -196,13 +196,13 @@ def data_distribution_inference(
     
     # explore the world size:
     # number of gpus available
-    if not num_gpus:
-        num_gpus = torch.cuda.device_count()
-        print(f"Found {num_gpus} GPUs, will launch {num_gpus} number of distributed jobs for inference")
+    if not num_threads:
+        num_threads = torch.cuda.device_count()
+        print(f"Found {num_threads} GPUs, will launch {num_threads} number of distributed jobs for inference")
 
     final_output = []
     # evenly distribute workload across gpus
-    gpu_chunk_size = int(len(list_dict_data)//num_gpus) + 1
+    gpu_chunk_size = int(len(list_dict_data)//num_threads) + 1
 
     def submit_sampling(chunked_data_dict, port, gpu_idx, result_dict):
         chunk_data = chunked_data_dict[gpu_idx]
@@ -225,7 +225,7 @@ def data_distribution_inference(
     results = manager.dict()
     processes = []
     chunked_data_dict = {}
-    for gpu_idx in range(num_gpus):
+    for gpu_idx in range(num_threads):
 
         start_idx = gpu_idx * gpu_chunk_size
         end_idx = start_idx + gpu_chunk_size
@@ -245,7 +245,7 @@ def data_distribution_inference(
         process.join()
 
     
-    for gpu_idx in range(num_gpus):
+    for gpu_idx in range(num_threads):
         if gpu_idx in results:
             final_output.extend(results[gpu_idx])
 
