@@ -285,7 +285,17 @@ def main():
     ############################
     logger.info("*** Load dataset ***")
     tokenizer_path = args.tokenizer if args.tokenizer else args.model
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=args.trust_remote_code)
+    
+    # retry loading tokenizer for 5 times, then throw error
+    max_retry = 5
+    for i in range(max_retry):
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=args.trust_remote_code)
+            break
+        except:
+            if i == max_retry - 1:
+                raise ValueError(f"Failed to load tokenizer after {max_retry} retries")
+            print(f"Failed to load tokenizer, retrying...")
     tokenizer.pad_token = tokenizer.eos_token
 
     custom_dataset, input_dataset = load_ibm_bon_data(args.input_path, debug=args.debug)

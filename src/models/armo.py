@@ -6,9 +6,19 @@ from tqdm import tqdm
 
 class ArmoRMPipeline:
     def __init__(self, model_name, device=0):
-        model = AutoModelForSequenceClassification.from_pretrained(model_name, device_map=device, 
-                                    trust_remote_code=True, torch_dtype=torch.bfloat16)
-        tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
+        # retry loading model and tokenizer for 5 times, then throw error
+        max_retry = 5
+        for i in range(max_retry):
+            try:
+                model = AutoModelForSequenceClassification.from_pretrained(model_name, device_map=device, 
+                                            trust_remote_code=True, torch_dtype=torch.bfloat16)
+                tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
+                break
+            except:
+                if i == max_retry - 1:
+                    raise ValueError(f"Failed to load model and tokenizer after {max_retry} retries")
+                print(f"Failed to load model and tokenizer, retrying...")
+
         self.model = model
         self.tokenizer = tokenizer
         random.seed(0)
