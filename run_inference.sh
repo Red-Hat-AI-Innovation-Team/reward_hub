@@ -33,6 +33,7 @@ for bestn in 64; do
     --dataset_path "$input_data" \
     --num_return_sequences "$bestn" \
     --vllm_batch_size 20 \
+    --num_threads 8 \
     --max_prompt_length 2048 \
     --max_new_tokens 1024 \
     --shard_nums "$SHARD_NUMS" \
