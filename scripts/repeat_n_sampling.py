@@ -171,12 +171,15 @@ def data_distribution_inference(
     shuffle=False,
     shard_nums=1,
     shard_idx=0,
+    debug=False
 ):
     if "mt_bench" in dataset_path:
         list_dict_data = load_best_of_n_mt_bench("questions.jsonl", "granite_model_answer/merlinite-granite-7b-lab-4.jsonl")
     else:
         list_dict_data = read_input_jsonl(dataset_path)
-
+    if debug:
+        list_dict_data = list_dict_data[:100]
+    
     # obtain the shard_range; ignore if they are not set. 
     if shard_nums <= 1:
         print("Use full dataset")
