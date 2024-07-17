@@ -245,6 +245,10 @@ def singular_classifier_thread(model_name, device_id, chunked_data_dict, results
 
 def main():
     args = get_args()
+    if args.model_type != "dpo":
+        import multiprocessing
+        multiprocessing.set_start_method('spawn')
+    
     accelerator = Accelerator()
 
     ###############
@@ -432,6 +436,5 @@ def main():
 
 if __name__ == "__main__":
     # load_ibm_bon_data("/dccstor/gxamr/linux-386/llm-alignment/preference-generator/uniform_sample_dataset_30k/best_of_64/bon_sampling_data_split_0.jsonl", debug=True)
-    import multiprocessing
-    multiprocessing.set_start_method('spawn')     
+
     main()

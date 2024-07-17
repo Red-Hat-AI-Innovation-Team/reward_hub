@@ -14,6 +14,7 @@ bash launch_reward_server.sh
 python scripts/run_bon_scoring.py \
 --model="$pref_model" \
 --ref_model="$ref_model" \
+--model_type="dpo" \
 --num_threads 1 \
 --max_prompt_length 1500 \
 --base_port 8020 \
