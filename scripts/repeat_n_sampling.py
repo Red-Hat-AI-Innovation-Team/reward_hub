@@ -40,8 +40,15 @@ def read_input_jsonl(path, decoder_name_or_path):
             assert "messages" in ex 
             assert "dataset" in ex 
             assert "group" in ex
+            
+            # if it's not an ibm, redhat granite, merlinite model, then remove the ibm system prompt. 
+            if "ibm" not in decoder_name_or_path and "granite" not in decoder_name_or_path and "merlinite" not in decoder_name_or_path:
+                ex["messages"] = ex["messages"][1:] if ex["messages"][0]["role"] == "system" else ex["messages"]
+            
             if check_tokenizer_chat_template(tokenizer):
                 ex["formatted_input"] = tokenizer.apply_chat_template(ex["messages"][:-1], tokenize=False)
+                if "llama-3" in decoder_name_or_path.lower():
+                    ex["formatted_input"] = ex["formatted_input"] + "<|start_header_id|>assistant<|end_header_id|>"
             else:
                 ex['formatted_input'] = default_chat_formatter(ex["messages"][:-1])
             ex["targets"] = ex["messages"][-1]["content"]

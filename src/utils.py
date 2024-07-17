@@ -219,6 +219,8 @@ def load_simple_dataset(
     if logger is not None:
         logger.info("*** Preparing dataset with HF Transformers ***")
     # docs https://huggingface.co/docs/transformers/main/en/chat_templating
+    
+    # prioritize using tokenizer-built-in chat-formatter
     if usable_tokenizer:
         if logger is not None:
             logger.info("*** Preparing dataset using tokenizer chat-template ***")
