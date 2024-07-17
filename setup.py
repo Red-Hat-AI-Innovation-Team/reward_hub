@@ -44,7 +44,6 @@ setup(
         "isort>=5.12.0",
         "pandas",
         "peft",
-        "fire",
         "pytest",
         "scipy",
         "tabulate",  # dependency for markdown rendering in pandas
