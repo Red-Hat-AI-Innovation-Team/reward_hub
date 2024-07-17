@@ -16,7 +16,11 @@ from src import (
     zip_,
     read_jsonl,
     TGI,
-    VLLM
+    VLLM,
+)
+from src.utils import (
+    check_tokenizer_chat_template,
+    default_chat_formatter
 )
 import random
 from transformers import AutoTokenizer
@@ -25,18 +29,22 @@ from mt_best_of_n import load_best_of_n_mt_bench
 from datasets import Dataset
 
 
-def read_input_jsonl(path):
+def read_input_jsonl(path, decoder_name_or_path):
+    tokenizer = AutoTokenizer.from_pretrained(decoder_name_or_path)
+
     data = []
     with open(path, 'r') as file:
         for line in file:
             # Parse the JSON data from each line and append to the list
             ex = json.loads(line)
-            if "prompt" in ex:
-                ex["formatted_input"] = ex["prompt"]
-            assert "targets" in ex 
+            assert "messages" in ex 
             assert "dataset" in ex 
-            assert "group" in ex 
-            assert "formatted_input" in ex
+            assert "group" in ex
+            if check_tokenizer_chat_template(tokenizer):
+                ex["formatted_input"] = tokenizer.apply_chat_template(ex["messages"][:-1], tokenize=False)
+            else:
+                ex['formatted_input'] = default_chat_formatter(ex["messages"][:-1])
+            ex["targets"] = ex["messages"][-1]["content"]
             data.append(ex)
     return data
 
@@ -176,10 +184,20 @@ def data_distribution_inference(
     if "mt_bench" in dataset_path:
         list_dict_data = load_best_of_n_mt_bench("questions.jsonl", "granite_model_answer/merlinite-granite-7b-lab-4.jsonl")
     else:
-        list_dict_data = read_input_jsonl(dataset_path)
+        list_dict_data = read_input_jsonl(dataset_path, decoder_name_or_path)
     if debug:
         list_dict_data = list_dict_data[:100]
     
+    # Print 2 Examples of the data    
+    print("################# Example 1: formatted_input ##################### \n\n")
+    print(list_dict_data[0]["formatted_input"])
+    
+    
+    print("################# Example 1: targets ##################### \n\n")
+    print(list_dict_data[0]["targets"])
+    
+
+    breakpoint()
     # obtain the shard_range; ignore if they are not set. 
     if shard_nums <= 1:
         print("Use full dataset")

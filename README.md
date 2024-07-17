@@ -34,12 +34,20 @@ bash run_inference.sh <input_data_path> <model_engine> SHARD_NUMS SHARD_IDX
 ```
 The expected input_data should be a jsonl file with the following format:
 ```
-{
+{   
+    "messages": ..,
+    "dataset"..,
+    "group":..,
+}
+
+=> it will be processed into the following, where we only take the last messages as response:
+{   
     "formatted_input": ..,
     "targets": ..,
     "dataset"..,
     "group":..,
 }
+
 
 # TO-DO:
 write a general dataloader for messages format, and apply tokenizer/fastchat chat_templates

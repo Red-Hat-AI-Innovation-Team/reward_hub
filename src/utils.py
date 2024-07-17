@@ -129,6 +129,24 @@ def convert_to_json_format(input_string, system_prompt=MERLINITE_SYSTEM):
     return segments
 
 
+def default_chat_formatter(messages):
+    """Format chat messages to a single string."""
+    formatted_input = ""
+    
+    # Iterate over each message to construct the conversation history
+    for message in messages:
+        if message["role"] == "system":
+            # Add each message with a newline based on the role
+            system_prompt = message["content"]
+            formatted_input = f'<|system|>\n{system_prompt}'
+        elif message["role"] == "user":
+            formatted_input += "\n<|user|>\n"+message['content']
+        elif message["role"] == "assistant":
+            formatted_input += "\n<|assistant|>\n"+message['content']
+    formatted_input += "\n<|assistant|>\n"
+    return formatted_input
+
+
 def save_to_local(
     results_dict: Union[Dict, List],
     save_path: str,
