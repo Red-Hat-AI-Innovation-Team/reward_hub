@@ -192,7 +192,7 @@ def load_simple_dataset(
     tokenizer: PreTrainedTokenizer = None,
     logger: logging.Logger = None,
     keep_columns: List[str] = ["text", "id"],
-    max_prompt_length=800,
+    max_prompt_length=1500,
 ) -> Dataset:
     """
     Loads either the core eval set for HERM or the existing preference data test sets.

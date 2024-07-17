@@ -15,6 +15,7 @@ python scripts/run_bon_scoring.py \
 --model="$pref_model" \
 --ref_model="$ref_model" \
 --num_threads 1 \
+--max_prompt_length 1500 \
 --base_port 8020 \
 --batch_size=4 \
 --input_path $input_data

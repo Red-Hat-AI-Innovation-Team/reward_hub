@@ -12,6 +12,7 @@ echo "Input Source is: $input_data"
 python scripts/run_bon_scoring.py \
 --model="$pref_model" \
 --model_type "classifier" \
+--max_prompt_length 1500 \
 --num_threads 8 \
 --batch_size 8 \
 --input_path $input_data

@@ -131,6 +131,7 @@ def get_args():
     parser.add_argument("--chat_template", type=str, default="tulu", help="path to chat template")
     parser.add_argument("--do_not_save", action="store_false", help="do not save results to hub (for debugging)")
     parser.add_argument("--batch_size", type=int, default=4, help="batch size for inference")
+    parser.add_argument("--max_prompt_length", type=int, default=1024, help="max prompt length")
     parser.add_argument("--num_threads", type=int, default=1, help="how many threads to submit")
     parser.add_argument("--base_port", type=int, default=8020, help="the base_port to infer other ports to make API calls for")
     parser.add_argument(
@@ -307,6 +308,7 @@ def main():
         tokenizer=tokenizer,
         logger=logger,
         keep_columns=["formatted_output", "prompt", "original_prompt", "response", "messages"],
+        max_prompt_length=args.max_prompt_length
     )
 
     # save_dir
