@@ -90,17 +90,25 @@ class DPOInferenceVLLM:
                 i for i, token in enumerate(chosen_tokens[idx]) if i >= response_start_idx and token != PAD_TOKEN
             ]
             rej_unmask_indices = [
-                i for i, token in enumerate(rejected_tokens[idx]) if i >= ref_response_start_idx and token != PAD_TOKEN
+                i for i, token in enumerate(rejected_tokens[idx]) if i >= response_start_idx and token != PAD_TOKEN
             ]
+            ref_chosen_unmask_indices = [
+                i for i, token in enumerate(chosen_ref_tokens[idx]) if i >= ref_response_start_idx and token != PAD_TOKEN
+            ]
+            ref_rej_unmask_indices = [
+                i for i, token in enumerate(rejected_ref_tokens[idx]) if i >= ref_response_start_idx and token != PAD_TOKEN
+            ]
+
             # this is a good sanity check;
             # theoretically, they are only comparable if they have the same number of tokens. 
+            # they should
             # assert len(chosen_unmask_indices) == len(rej_unmask_indices), "The number of tokens in the chosen and rejected responses are not the same"
 
             # sum(chosen_logprob[1:]) - sum(chosen_ref_logprob[1:])
             # sum(rejected_logprob[1:]) - sum(rejected_ref_logprob[1:])
 
-            chosen_rw = sum(chosen_logprob[chosen_unmask_indices]) - sum(chosen_ref_logprob[chosen_unmask_indices])
-            rejected_rw = sum(rejected_logprob[rej_unmask_indices]) - sum(rejected_ref_logprob[rej_unmask_indices])
+            chosen_rw = sum(chosen_logprob[chosen_unmask_indices]) - sum(chosen_ref_logprob[ref_chosen_unmask_indices])
+            rejected_rw = sum(rejected_logprob[rej_unmask_indices]) - sum(rejected_ref_logprob[ref_rej_unmask_indices])
             if average_log_prob:
                 chosen_rw = chosen_rw/len(chosen_unmask_indices)
                 rejected_rw = rejected_rw/len(rej_unmask_indices)
