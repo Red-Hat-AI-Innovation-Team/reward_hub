@@ -146,10 +146,15 @@ class DPOInferenceVLLM:
         chosen_batch, prompt_batch = [ex["formatted_output"] for ex in batch], [ex["prompt"] for ex in batch]
 
         tokenized_prompt_batch = [self.tokenizer.encode(ex) for ex in prompt_batch]
+        ref_tokenize_prompt_batch = [self.ref_tokenizer.encode(ex) for ex in prompt_batch]
 
         # for each item in the tokenized batch; find the index of last non-pad token
         generation_first_token_indices = [
             len(ex) for ex in tokenized_prompt_batch
+        ]
+
+        ref_generation_first_token_indices = [
+            len(ex) for ex in ref_tokenize_prompt_batch
         ]
 
         def fetch_logprobs(batch, model_name, port, result_dict, key):
@@ -184,11 +189,16 @@ class DPOInferenceVLLM:
                 np.array(chosen_logprobs[idx]), np.array(chosen_ref_logprobs[idx])
 
             response_start_idx = generation_first_token_indices[idx]
+            ref_response_start_idx = ref_generation_first_token_indices[idx]
+
             chosen_unmask_indices = [
                 i for i, token in enumerate(chosen_tokens[idx]) if i >= response_start_idx and token != PAD_TOKEN
             ]
+            ref_chosen_unmask_indices = [
+                i for i, token in enumerate(chosen_ref_tokens[idx]) if i >= ref_response_start_idx and token != PAD_TOKEN
+            ]
 
-            chosen_rw = sum(chosen_logprob[chosen_unmask_indices]) - sum(chosen_ref_logprob[chosen_unmask_indices])
+            chosen_rw = sum(chosen_logprob[chosen_unmask_indices]) - sum(chosen_ref_logprob[ref_chosen_unmask_indices])
 
             if average_log_prob:
                 chosen_rw = chosen_rw/len(chosen_unmask_indices)
