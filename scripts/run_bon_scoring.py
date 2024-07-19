@@ -312,7 +312,7 @@ def main():
     custom_dataset, input_dataset = load_ibm_bon_data(args.input_path, debug=args.debug)
     
     print("#################### Example Prompt Messages ####################\n")
-    print(custom_dataset[0]["raw_prompt"])
+    print(custom_dataset[0]["prompt"])
     print("\n#################### End Prompt Messages ####################")
 
     # modify the load_eval_dataset to be handling single column outputs. 
