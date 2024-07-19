@@ -38,7 +38,7 @@ echo "Detected $num_gpus GPUs."
 CUDA_VISIBLE_DEVICES=0,1,2,3 python -u -m vllm.entrypoints.openai.api_server \
     --host 0.0.0.0 \
     --model $pref_model \
-    --gpu-memory-utilization 0.7 \
+    --gpu-memory-utilization 0.5 \
     --port 8020 \
     --tensor-parallel-size 4 \
     --load-format auto > logs/server_0.log 2>&1 &
@@ -53,7 +53,7 @@ pid_array+=($!)  # Save the PID of the check_success process
 CUDA_VISIBLE_DEVICES=4,5,6,7 python -u -m vllm.entrypoints.openai.api_server \
     --host 0.0.0.0 \
     --model $ref_model \
-    --gpu-memory-utilization 0.7 \
+    --gpu-memory-utilization 0.5 \
     --port 8021 \
     --tensor-parallel-size 4 \
     --load-format auto > logs/server_1.log 2>&1 &
