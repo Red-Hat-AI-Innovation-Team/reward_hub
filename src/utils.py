@@ -264,7 +264,7 @@ def truncate_prompt(tokenizer, prompt, formatted_full_text, max_prompt_length=20
     if len(tokens) <= max_prompt_length and len(tokenized_output) <= max_output_length:
         return prompt, formatted_full_text
 
-    truncated_prompt = tokens[-max_prompt_length:]
+    truncated_tokens = tokens[-max_prompt_length:]
     max_text_length = max_prompt_length + max_output_length
     truncated_text = tokenized_output[-max_output_length: max_text_length]
     return tokenizer.decode(truncated_tokens), tokenizer.decode(truncated_text)
