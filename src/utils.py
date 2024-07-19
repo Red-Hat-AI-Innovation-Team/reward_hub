@@ -260,15 +260,18 @@ def load_simple_dataset(
 
 
 def truncate_prompt(tokenizer, prompt, formatted_full_text, max_prompt_length=2048, max_output_length=1500):
-    tokens, tokenized_output = tokenizer.encode(prompt), tokenizer.encode(formatted_full_text)
-    if len(tokens) <= max_prompt_length and len(tokenized_output) <= max_output_length:
-        return prompt, formatted_full_text
+    
+    tokens, tokenized_text = tokenizer.encode(prompt), tokenizer.encode(formatted_full_text)
+    output_tokens = tokenized_text[len(tokens):]
 
-    truncated_tokens = tokens[-max_prompt_length:]
-    max_text_length = max_prompt_length + max_output_length
-    truncated_text = tokenized_output[-max_output_length: max_text_length]
-    return tokenizer.decode(truncated_tokens), tokenizer.decode(truncated_text)
+    if len(tokens) > max_prompt_length:
+        tokens = tokens[-max_prompt_length:]
+    if len(output_tokens) > max_output_length:
+        output_tokens = output_tokens[:max_output_length]
+    
+    final_full_tokens = tokens + output_tokens
 
+    return tokenizer.decode(tokens), tokenizer.decode(final_full_tokens)
 
 def prepare_dialogue_from_tokenizer(
     example: Dict[str, Any],
