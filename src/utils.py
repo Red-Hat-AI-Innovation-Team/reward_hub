@@ -198,8 +198,6 @@ def save_to_local(
                 f.write(dumped)
 
 
-
-
 def load_simple_dataset(
     bon_dataset: bool = True,
     conv: Conversation = None,
@@ -261,23 +259,15 @@ def load_simple_dataset(
     return dataset
 
 
+def truncate_prompt(tokenizer, prompt, formatted_full_text, max_prompt_length=2048, max_output_length=1500):
+    tokens, tokenized_output = tokenizer.encode(prompt), tokenizer.encode(formatted_full_text)
+    if len(tokens) <= max_prompt_length and len(tokenized_output) <= max_output_length:
+        return prompt, formatted_full_text
 
-def truncate_prompt(tokenizer, prompt, max_prompt_length=2048, truncate_method="keep_right"):
-    tokens = tokenizer.encode(prompt)
-    if len(tokens) <= max_prompt_length:
-        return prompt
-
-    if truncate_method == "middle":
-        keep_tokens = int(max_prompt_length//2)
-        truncated_tokens = tokens[:keep_tokens] + tokens[-keep_tokens:]
-    elif truncate_method == "keep_left":
-        truncated_tokens = tokens[:max_prompt_length]
-    elif truncate_method == "keep_right":
-        truncated_tokens = tokens[-max_prompt_length:]
-    else:
-        raise Exception(f"Invalid truncate method: {truncate_method}")
-
-    return tokenizer.decode(truncated_tokens)
+    truncated_prompt = tokens[-max_prompt_length:]
+    max_text_length = max_prompt_length + max_output_length
+    truncated_text = tokenized_output[-max_output_length: max_text_length]
+    return tokenizer.decode(truncated_tokens), tokenizer.decode(truncated_text)
 
 
 def prepare_dialogue_from_tokenizer(
@@ -308,16 +298,13 @@ def prepare_dialogue_from_tokenizer(
 
             # truncate from left would be ideal, and ensures same truncation between 
             # prompt and output
-            # TODO: need to rewrite the truncation code!
-            formatted_prompt = truncate_prompt(tokenizer, formatted_prompt, max_prompt_length=max_prompt_length, truncate_method="keep_right")
-
             # end with chosen/rejected
             messages.append({"role": "assistant", "content": example["response"]})
             formatted_output = tokenizer.apply_chat_template(
                 messages,
                 tokenize=False,
             )
-            formatted_output = truncate_prompt(tokenizer, formatted_output, max_prompt_length=max_prompt_length, truncate_method="keep_right")
+            formatted_prompt, formatted_output = truncate_prompt(tokenizer, formatted_prompt, formatted_output, max_prompt_length=max_prompt_length)
 
             example["formatted_output"] = formatted_output + tokenizer.eos_token if formatted_output[-1] != tokenizer.eos_token else formatted_output
             example["prompt"] = formatted_prompt
@@ -362,9 +349,9 @@ def prepare_fastchat_conv(
 
             # end with chosen/rejected
             dialogue_template.messages.append([dialogue_template.roles[1], example["response"]])
-            formatted_output = truncate_prompt(tokenizer, dialogue_template.get_prompt(), max_prompt_length=max_prompt_length, truncate_method="keep_right")
+            formatted_prompt, formatted_output = truncate_prompt(tokenizer, formatted_prompt, dialogue_template.get_prompt(), max_prompt_length=max_prompt_length)
             example["formatted_output"] = formatted_output + tokenizer.eos_token if formatted_output[-1] != tokenizer.eos_token else formatted_output
-            example["prompt"] = truncate_prompt(tokenizer, formatted_prompt, max_prompt_length=max_prompt_length, truncate_method="keep_right")
+            example["prompt"] = formatted_prompt
             example["messages"] = dialogue_template.messages
         else:
             # single turn

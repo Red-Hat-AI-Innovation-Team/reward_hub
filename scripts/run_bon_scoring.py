@@ -26,7 +26,8 @@ from fastchat.conversation import get_conv_template
 from tqdm import tqdm
 from datasets import Dataset
 import math
-from src import DPO_MODEL_CONFIG, save_to_local, convert_to_json_format, DPOInferenceVLLM, load_simple_dataset, convert_llamas_to_json_format
+from src import DPO_MODEL_CONFIG, save_to_local, convert_to_json_format, DPOInferenceVLLM, load_simple_dataset
+from src.utils import convert_llamas_to_json_format
 import json 
 import pandas as pd
 from transformers import AutoTokenizer
