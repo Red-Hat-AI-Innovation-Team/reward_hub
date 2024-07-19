@@ -98,6 +98,20 @@ MERLINITE_SYSTEM= "<|system|>\nYou are an AI language model developed by IBM Res
 ASSISTANT = "\n<|assistant|>\n"
 USER = "\n<|user|>\n"
 
+def convert_llamas_to_json_format(input_string):
+    user_symbol = "<|start_header_id|>user<|end_header_id|>"
+    eot_symbol = "<|eot_id|>"
+    assistant_symbol = "<|start_header_id|>assistant<|end_header_id|>"
+    turns = input_string.replace("<|begin_of_text|>", "").split(eot_symbol)[:-1]
+    msgs = []
+    for turn in turns:
+        if user_symbol in turn:
+            msgs.append({"content": turn.replace(user_symbol, "").strip(), "role": "user"})
+        elif assistant_symbol in turn:
+            msgs.append({"content": turn.replace(assistant_symbol, "").strip(), "role": "assistant"})
+    return msgs
+
+
 def convert_to_json_format(input_string, system_prompt=MERLINITE_SYSTEM):
     
     # Remove the system prompt at the beginning if it exists
@@ -294,6 +308,7 @@ def prepare_dialogue_from_tokenizer(
 
             # truncate from left would be ideal, and ensures same truncation between 
             # prompt and output
+            # TODO: need to rewrite the truncation code!
             formatted_prompt = truncate_prompt(tokenizer, formatted_prompt, max_prompt_length=max_prompt_length, truncate_method="keep_right")
 
             # end with chosen/rejected

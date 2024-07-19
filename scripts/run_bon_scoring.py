@@ -26,7 +26,7 @@ from fastchat.conversation import get_conv_template
 from tqdm import tqdm
 from datasets import Dataset
 import math
-from src import DPO_MODEL_CONFIG, save_to_local, convert_to_json_format, DPOInferenceVLLM, load_simple_dataset
+from src import DPO_MODEL_CONFIG, save_to_local, convert_to_json_format, DPOInferenceVLLM, load_simple_dataset, convert_llamas_to_json_format
 import json 
 import pandas as pd
 from transformers import AutoTokenizer
@@ -94,7 +94,12 @@ def load_ibm_bon_data(data_path, debug=False):
     id=0
     for instance in data:
         prompt = instance["prompt"]
-        raw_prompt = convert_to_json_format(prompt)
+        if "prompt_messages" in instance:
+            raw_prompt = instance["prompt_messages"]
+        elif "llama" in instance["decoder_name_or_path"].lower():
+            raw_prompt = convert_llamas_to_json_format(prompt)
+        else:
+            raw_prompt = convert_to_json_format(prompt)
         output_candidates = instance["output"]
         # write a code that is stable for random numbers of output_candidates > 0
         for can_idx in range(len(output_candidates)):
@@ -304,6 +309,10 @@ def main():
     tokenizer.pad_token = tokenizer.eos_token
 
     custom_dataset, input_dataset = load_ibm_bon_data(args.input_path, debug=args.debug)
+    
+    print("#################### Example Prompt Messages ####################\n")
+    print(custom_dataset[0]["raw_prompt"])
+    print("\n#################### End Prompt Messages ####################")
 
     # modify the load_eval_dataset to be handling single column outputs. 
     simple_dataset = load_simple_dataset(
