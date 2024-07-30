@@ -18,7 +18,7 @@ echo "Shard index is: $SHARD_IDX"
 
 bash launch_sampling_server.sh $model_engine
 
-for bestn in 64; do
+for bestn in 32; do
     filename_with_extension=$(basename "$input_data")
     filename="${filename_with_extension%.jsonl}"
 
