@@ -191,7 +191,7 @@ def reward_annotation(pref_port, ref_port, chunked_data_dict, args, thread_idx, 
         drop_last=False,
     )
 
-    all_scores= []
+    all_scores_dicts= []
 
     for step, batch in enumerate(tqdm(dataloader, desc="RM batch steps")):
         print(f"RM inference step {step}/{len(dataloader)}")
@@ -205,7 +205,7 @@ def reward_annotation_single(pref_port, ref_port, dataset, args):
     ############################
     # Load reward model pipeline
     ############################
-    
+
     BATCH_SIZE = args.batch_size
     model = {
         "model_name": args.model,
@@ -233,13 +233,13 @@ def reward_annotation_single(pref_port, ref_port, dataset, args):
         drop_last=False,
     )
 
-    all_scores= []
+    all_scores_dicts= []
 
     for step, batch in enumerate(tqdm(dataloader, desc="RM batch steps")):
         print(f"RM inference step {step}/{len(dataloader)}")
-        scores = dpo_annotator.monolithic_inference_step(batch)
-        all_scores += scores
-    return all_scores
+        scores_dicts = dpo_annotator.monolithic_inference_step(batch)
+        all_scores_dicts += scores_dicts
+    return all_scores_dicts
 
 def singular_classifier_thread(model_name, device_id, chunked_data_dict, results):
     chunk_data_hf = chunked_data_dict[device_id]
@@ -393,11 +393,36 @@ def main():
     ############################
     # Print & process results
     ############################
-    # add column for results for easy printing
-    raw_out_dataset = simple_dataset.add_column("results", final_scores)
+    
+    # final_scores: List[Dict[str, List]] or List[int]
+    
+    if type(final_scores[0]) == int:
+        # add column for results for easy printing
+        raw_out_dataset = simple_dataset.add_column("results", final_scores)
+    elif type(final_scores[0]) == dict:
+        # decompose the result dict into different columns
+        # final_reward = {
+        #     "log-ratio-rewards": chosen_rewards_batch,
+        #     "generated_tokens_pref": generated_tokens_pref_batch, 
+        #     "logprobs_pref": generated_logprobs_pref_batch
+        #     "generated_tokens_ref": generated_tokens_ref_batch, 
+        #     "logprobs_ref": generated_logprobs_ref_batch,
+        # }
+        raw_out_dataset = simple_dataset.add_column("results", [ x["log_ratio_reward"] for x in final_scores ])
+        raw_out_dataset = raw_out_dataset.add_column("generated_tokens_pref", [ x["generated_tokens_pref"] for x in final_scores ])
+        raw_out_dataset = raw_out_dataset.add_column("logprobs_pref", [ x["logprobs_pref"] for x in final_scores ])
+        raw_out_dataset = raw_out_dataset.add_column("generated_tokens_ref", [ x["generated_tokens_ref"] for x in final_scores ])
+        raw_out_dataset = raw_out_dataset.add_column("logprobs_ref", [ x["logprobs_ref"] for x in final_scores ])
+
+    else:
+        raise ValueError("Final scores should be either a list of integers or a list of dictionaries")
 
     best_of_n_samples, rewards_ls, samples_to_reward_dicts = [], [], []
 
+    # create lists for generated tokens and logprobs
+    generated_tokens_pref_ls, generated_tokens_ref_ls = [], []
+    logprobs_pref_ls, logprobs_ref_ls = [], []
+    
     best_of_n = int(len(raw_out_dataset)/len(input_dataset))
     print("best-of-n is", best_of_n)
 
@@ -407,6 +432,10 @@ def main():
         
         reward_dict = {}
         per_instance_rewards = []
+        per_instance_generated_tokens_pref = []
+        per_instance_generated_tokens_ref = []
+        per_instance_logprobs_pref = []
+        per_instance_logprobs_ref = []
         
         # saninty check
         for in_idx, ex in enumerate(mapped_outputs):
@@ -416,31 +445,47 @@ def main():
             assert instance["output"][in_idx] == ex["response"], "original order is being disrupted"
             reward_dict[ex["response"]] = ex["results"]
             per_instance_rewards.append(ex["results"])
+            # add the generated tokens and logprobs
+            per_instance_generated_tokens_pref.append(ex["generated_tokens_pref"])
+            per_instance_generated_tokens_ref.append(ex["generated_tokens_ref"])
+            per_instance_logprobs_pref.append(ex["logprobs_pref"])
+            per_instance_logprobs_ref.append(ex["logprobs_ref"])
 
         best_of_n_samples.append(max(reward_dict, key=reward_dict.get))
         rewards_ls.append(per_instance_rewards)
+        # append logprobs and generated tokens
+        generated_tokens_pref_ls.append(per_instance_generated_tokens_pref)
+        generated_tokens_ref_ls.append(per_instance_generated_tokens_ref)
+        logprobs_pref_ls.append(per_instance_logprobs_pref)
+        logprobs_ref_ls.append(per_instance_logprobs_ref)
+        
         samples_to_reward_dicts.append(reward_dict)
     
     # give a best of N response, along with scoring dict: with score matching each output.  
     input_dataset = input_dataset.add_column("best_of_n_sample", best_of_n_samples)
     
     best_of_n_equal_target = [best_of_n_samples[i]==input_dataset[i]["target_output"] for i in range(len(best_of_n_samples))]
-    
+
     input_dataset = input_dataset.add_column("target_is_bestn", best_of_n_equal_target)
     
     input_dataset = input_dataset.add_column("output_reward_scores", rewards_ls)
     
+    # add the generated tokens and logprobs
+    input_dataset = input_dataset.add_column("generated_tokens_pref", generated_tokens_pref_ls)
+    input_dataset = input_dataset.add_column("generated_tokens_ref", generated_tokens_ref_ls)
+    input_dataset = input_dataset.add_column("logprobs_pref", logprobs_pref_ls)
+    input_dataset = input_dataset.add_column("logprobs_ref", logprobs_ref_ls)
 
     output_filename = os.path.basename(args.input_path)+"-rewards.jsonl"
 
     output_save_path = os.path.join(save_dir, output_filename)
     input_dataset.to_json(output_save_path)
 
-    raw_output_save_path = output_save_path+"-raw.jsonl"
-    save_to_local(
-            raw_out_dataset, 
-            raw_output_save_path
-        )
+    # raw_output_save_path = output_save_path+"-raw.jsonl"
+    # save_to_local(
+    #         raw_out_dataset, 
+    #         raw_output_save_path
+    #     )
     # logger.info(f"Uploading chosen-rejected text with scores to {scores_url}")
 
 
