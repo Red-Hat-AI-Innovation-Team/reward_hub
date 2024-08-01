@@ -191,14 +191,14 @@ def reward_annotation(pref_port, ref_port, chunked_data_dict, args, thread_idx, 
         drop_last=False,
     )
 
-    all_scores_dicts= []
+    all_result_dicts= []
 
     for step, batch in enumerate(tqdm(dataloader, desc="RM batch steps")):
         print(f"RM inference step {step}/{len(dataloader)}")
-        scores = dpo_annotator.monolithic_inference_step(batch)
-        all_scores += scores
+        result_dicts = dpo_annotator.monolithic_inference_step(batch)
+        all_result_dicts += result_dicts
 
-    results[thread_idx] = all_scores 
+    results[thread_idx] = all_result_dicts 
 
 
 def reward_annotation_single(pref_port, ref_port, dataset, args):
@@ -233,13 +233,13 @@ def reward_annotation_single(pref_port, ref_port, dataset, args):
         drop_last=False,
     )
 
-    all_scores_dicts= []
+    all_result_dicts= []
 
     for step, batch in enumerate(tqdm(dataloader, desc="RM batch steps")):
         print(f"RM inference step {step}/{len(dataloader)}")
-        scores_dicts = dpo_annotator.monolithic_inference_step(batch)
-        all_scores_dicts += scores_dicts
-    return all_scores_dicts
+        result_dicts = dpo_annotator.monolithic_inference_step(batch)
+        all_result_dicts += result_dicts
+    return all_result_dicts
 
 def singular_classifier_thread(model_name, device_id, chunked_data_dict, results):
     chunk_data_hf = chunked_data_dict[device_id]
