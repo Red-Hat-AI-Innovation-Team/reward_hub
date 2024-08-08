@@ -396,7 +396,7 @@ def main():
     
     # final_scores: List[Dict[str, List]] or List[int]
     
-    if type(final_scores[0]) == int:
+    if type(final_scores[0]) == float:
         # add column for results for easy printing
         raw_out_dataset = simple_dataset.add_column("results", final_scores)
     elif type(final_scores[0]) == dict:
