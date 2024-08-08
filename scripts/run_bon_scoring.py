@@ -445,20 +445,22 @@ def main():
             assert instance["output"][in_idx] == ex["response"], "original order is being disrupted"
             reward_dict[ex["response"]] = ex["results"]
             per_instance_rewards.append(ex["results"])
-            # add the generated tokens and logprobs
-            per_instance_generated_tokens_pref.append(ex["generated_tokens_pref"])
-            per_instance_generated_tokens_ref.append(ex["generated_tokens_ref"])
-            per_instance_logprobs_pref.append(ex["logprobs_pref"])
-            per_instance_logprobs_ref.append(ex["logprobs_ref"])
+            if type(final_scores[0]) != float:
+                # add the generated tokens and logprobs
+                per_instance_generated_tokens_pref.append(ex["generated_tokens_pref"])
+                per_instance_generated_tokens_ref.append(ex["generated_tokens_ref"])
+                per_instance_logprobs_pref.append(ex["logprobs_pref"])
+                per_instance_logprobs_ref.append(ex["logprobs_ref"])
 
         best_of_n_samples.append(max(reward_dict, key=reward_dict.get))
         rewards_ls.append(per_instance_rewards)
-        # append logprobs and generated tokens
-        generated_tokens_pref_ls.append(per_instance_generated_tokens_pref)
-        generated_tokens_ref_ls.append(per_instance_generated_tokens_ref)
-        logprobs_pref_ls.append(per_instance_logprobs_pref)
-        logprobs_ref_ls.append(per_instance_logprobs_ref)
-        
+        if type(final_scores[0]) != float:
+            # append logprobs and generated tokens
+            generated_tokens_pref_ls.append(per_instance_generated_tokens_pref)
+            generated_tokens_ref_ls.append(per_instance_generated_tokens_ref)
+            logprobs_pref_ls.append(per_instance_logprobs_pref)
+            logprobs_ref_ls.append(per_instance_logprobs_ref)
+            
         samples_to_reward_dicts.append(reward_dict)
     
     # give a best of N response, along with scoring dict: with score matching each output.  
@@ -469,12 +471,12 @@ def main():
     input_dataset = input_dataset.add_column("target_is_bestn", best_of_n_equal_target)
     
     input_dataset = input_dataset.add_column("output_reward_scores", rewards_ls)
-    
-    # add the generated tokens and logprobs
-    input_dataset = input_dataset.add_column("generated_tokens_pref", generated_tokens_pref_ls)
-    input_dataset = input_dataset.add_column("generated_tokens_ref", generated_tokens_ref_ls)
-    input_dataset = input_dataset.add_column("logprobs_pref", logprobs_pref_ls)
-    input_dataset = input_dataset.add_column("logprobs_ref", logprobs_ref_ls)
+    if type(final_scores[0]) != float:
+        # add the generated tokens and logprobs
+        input_dataset = input_dataset.add_column("generated_tokens_pref", generated_tokens_pref_ls)
+        input_dataset = input_dataset.add_column("generated_tokens_ref", generated_tokens_ref_ls)
+        input_dataset = input_dataset.add_column("logprobs_pref", logprobs_pref_ls)
+        input_dataset = input_dataset.add_column("logprobs_ref", logprobs_ref_ls)
 
     output_filename = os.path.basename(args.input_path)+"-rewards.jsonl"
 
