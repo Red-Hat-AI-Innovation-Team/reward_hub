@@ -33,7 +33,7 @@ setup(
     install_requires=[
         "accelerate",
         "bitsandbytes",
-        "black==23.1.0",
+        "black",
         "fire",
         "datasets",
         "deepspeed",
@@ -45,11 +45,9 @@ setup(
         "pandas",
         "peft",
         "pytest",
-        "vllm", # key installation that needs to be prioritized
         "scipy",
         "tabulate",  # dependency for markdown rendering in pandas
         "tokenizers",
         "transformers",  # needed for some late models, may need to bump in the future
-        "trl>=0.7.7",
     ],
 )

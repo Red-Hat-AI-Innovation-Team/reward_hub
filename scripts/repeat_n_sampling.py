@@ -16,7 +16,11 @@ from src import (
     zip_,
     read_jsonl,
     TGI,
-    VLLM
+    VLLM,
+)
+from src.utils import (
+    check_tokenizer_chat_template,
+    default_chat_formatter
 )
 import random
 from transformers import AutoTokenizer
@@ -25,18 +29,29 @@ from mt_best_of_n import load_best_of_n_mt_bench
 from datasets import Dataset
 
 
-def read_input_jsonl(path):
+def read_input_jsonl(path, decoder_name_or_path):
+    tokenizer = AutoTokenizer.from_pretrained(decoder_name_or_path)
+
     data = []
     with open(path, 'r') as file:
         for line in file:
             # Parse the JSON data from each line and append to the list
             ex = json.loads(line)
-            if "prompt" in ex:
-                ex["formatted_input"] = ex["prompt"]
-            assert "targets" in ex 
+            assert "messages" in ex 
             assert "dataset" in ex 
-            assert "group" in ex 
-            assert "formatted_input" in ex
+            assert "group" in ex
+            
+            # if it's not an ibm, redhat granite, merlinite model, then remove the ibm system prompt. 
+            if "ibm" not in decoder_name_or_path and "granite" not in decoder_name_or_path and "merlinite" not in decoder_name_or_path:
+                ex["messages"] = ex["messages"][1:] if ex["messages"][0]["role"] == "system" else ex["messages"]
+            
+            if check_tokenizer_chat_template(tokenizer):
+                ex["formatted_input"] = tokenizer.apply_chat_template(ex["messages"][:-1], tokenize=False)
+                if "llama-3" in decoder_name_or_path.lower():
+                    ex["formatted_input"] = ex["formatted_input"] + "<|start_header_id|>assistant<|end_header_id|>"
+            else:
+                ex['formatted_input'] = default_chat_formatter(ex["messages"][:-1])
+            ex["targets"] = ex["messages"][-1]["content"]
             data.append(ex)
     return data
 
@@ -167,15 +182,26 @@ def data_distribution_inference(
     vllm_batch_size=40,
     max_prompt_length=2048,
     truncate_method="middle",
-    num_gpus=None,
+    num_threads=None,
     shuffle=False,
     shard_nums=1,
     shard_idx=0,
+    debug=False
 ):
     if "mt_bench" in dataset_path:
         list_dict_data = load_best_of_n_mt_bench("questions.jsonl", "granite_model_answer/merlinite-granite-7b-lab-4.jsonl")
     else:
-        list_dict_data = read_input_jsonl(dataset_path)
+        list_dict_data = read_input_jsonl(dataset_path, decoder_name_or_path)
+    if debug:
+        list_dict_data = list_dict_data[:100]
+    
+    # Print 2 Examples of the data    
+    print("################# Example 1: formatted_input ##################### \n\n")
+    print(list_dict_data[0]["formatted_input"])
+    
+    
+    print("################# Example 1: targets ##################### \n\n")
+    print(list_dict_data[0]["targets"])
 
     # obtain the shard_range; ignore if they are not set. 
     if shard_nums <= 1:
@@ -196,13 +222,13 @@ def data_distribution_inference(
     
     # explore the world size:
     # number of gpus available
-    if not num_gpus:
-        num_gpus = torch.cuda.device_count()
-        print(f"Found {num_gpus} GPUs, will launch {num_gpus} number of distributed jobs for inference")
+    if not num_threads:
+        num_threads = torch.cuda.device_count()
+        print(f"Found {num_threads} GPUs, will launch {num_threads} number of distributed jobs for inference")
 
     final_output = []
     # evenly distribute workload across gpus
-    gpu_chunk_size = int(len(list_dict_data)//num_gpus) + 1
+    gpu_chunk_size = int(len(list_dict_data)//num_threads) + 1
 
     def submit_sampling(chunked_data_dict, port, gpu_idx, result_dict):
         chunk_data = chunked_data_dict[gpu_idx]
@@ -225,7 +251,7 @@ def data_distribution_inference(
     results = manager.dict()
     processes = []
     chunked_data_dict = {}
-    for gpu_idx in range(num_gpus):
+    for gpu_idx in range(num_threads):
 
         start_idx = gpu_idx * gpu_chunk_size
         end_idx = start_idx + gpu_chunk_size
@@ -245,7 +271,7 @@ def data_distribution_inference(
         process.join()
 
     
-    for gpu_idx in range(num_gpus):
+    for gpu_idx in range(num_threads):
         if gpu_idx in results:
             final_output.extend(results[gpu_idx])
 

@@ -63,7 +63,7 @@ def save_as_jsonl(data, filename):
         for entry in data:
             json_string = json.dumps(entry)
             file.write(json_string + '\n')
-            
+
 
 from datasets import Dataset, load_dataset
 import random

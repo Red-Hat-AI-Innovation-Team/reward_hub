@@ -24,9 +24,33 @@ ray start --head --num-cpus=32 --num-gpus=8
 It will automatically shard data according to num_shards and the current index. 
 This is very useful for multi-node distribtued compute. 
 
-Server will be automatically launched for the job. 
+Server will be automatically launched for the job.
+
+- SHARD_NUMS is total number of shards to make of the input_data
+- SHARD_IDX is the index of shard to run inference on
+
 ```
-bash run_inference.sh SHARD_NUMS SHARD_IDX
+bash run_inference.sh <input_data_path> <model_engine> SHARD_NUMS SHARD_IDX
+```
+The expected input_data should be a jsonl file with the following format:
+```
+{   
+    "messages": ..,
+    "dataset"..,
+    "group":..,
+}
+
+=> it will be processed into the following, where we only take the last messages as response:
+{   
+    "formatted_input": ..,
+    "targets": ..,
+    "dataset"..,
+    "group":..,
+}
+
+
+# TO-DO:
+write a general dataloader for messages format, and apply tokenizer/fastchat chat_templates
 ```
 
 
@@ -42,5 +66,11 @@ Single-thread testing:
 run_annotate_test.sh input_data_path
 ```
 
-### Support hf-reward models
-Provide support for huggingface classification reward models. 
+### Support hf classifier reward models
+They are small models that can be hosted on single gpu device, no need to launch vllm for them. 
+Hosting and inference happens at multi-processing phase. 
+
+To run reward annotation, pass in the input_path as argument
+```
+bash run_annotate_classifier.sh <input_data>
+```

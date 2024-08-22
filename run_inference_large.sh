@@ -16,9 +16,9 @@ echo "Model engine is: $model_engine"
 echo "Shard nums is: $SHARD_NUMS"
 echo "Shard index is: $SHARD_IDX"
 
-bash launch_sampling_server.sh $model_engine
+bash launch_sampling_server_large.sh $model_engine
 
-for bestn in 32; do
+for bestn in 64; do
     filename_with_extension=$(basename "$input_data")
     filename="${filename_with_extension%.jsonl}"
 
@@ -33,11 +33,12 @@ for bestn in 32; do
     --dataset_path "$input_data" \
     --num_return_sequences "$bestn" \
     --vllm_batch_size 20 \
-    --num_threads 8 \
+    --num_threads 2 \
     --max_prompt_length 2048 \
     --max_new_tokens 1024 \
     --shard_nums "$SHARD_NUMS" \
-    --shard_idx "$SHARD_IDX"
+    --shard_idx "$SHARD_IDX" \
+    --debug True
     # Echo the process ID of the last background process
     echo $!
 

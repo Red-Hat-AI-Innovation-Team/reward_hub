@@ -27,6 +27,7 @@ from tqdm import tqdm
 from datasets import Dataset
 import math
 from src import DPO_MODEL_CONFIG, save_to_local, convert_to_json_format, DPOInferenceVLLM, load_simple_dataset
+from src.utils import convert_llamas_to_json_format
 import json 
 import pandas as pd
 from transformers import AutoTokenizer
@@ -94,7 +95,12 @@ def load_ibm_bon_data(data_path, debug=False):
     id=0
     for instance in data:
         prompt = instance["prompt"]
-        raw_prompt = convert_to_json_format(prompt)
+        if "prompt_messages" in instance:
+            raw_prompt = instance["prompt_messages"]
+        elif "llama" in instance["decoder_name_or_path"].lower():
+            raw_prompt = convert_llamas_to_json_format(prompt)
+        else:
+            raw_prompt = convert_to_json_format(prompt)
         output_candidates = instance["output"]
         # write a code that is stable for random numbers of output_candidates > 0
         for can_idx in range(len(output_candidates)):
@@ -121,6 +127,7 @@ def get_args():
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, required=True, help="path to model")
+    parser.add_argument("--model_type", type=str, default="dpo", help="type of model (dpo or classifier)")
     parser.add_argument("--save_dir", type=str,  default=None, help="directory to save results")
     parser.add_argument("--ref_model", type=str, default=None, help="path to model")
     parser.add_argument(
@@ -130,10 +137,11 @@ def get_args():
     parser.add_argument("--chat_template", type=str, default="tulu", help="path to chat template")
     parser.add_argument("--do_not_save", action="store_false", help="do not save results to hub (for debugging)")
     parser.add_argument("--batch_size", type=int, default=4, help="batch size for inference")
+    parser.add_argument("--max_prompt_length", type=int, default=1024, help="max prompt length")
     parser.add_argument("--num_threads", type=int, default=1, help="how many threads to submit")
     parser.add_argument("--base_port", type=int, default=8020, help="the base_port to infer other ports to make API calls for")
     parser.add_argument(
-        "--pref_sets",
+        "--input_path",
         type=str,
         default=None,
         help="Specify the preference sets file"
@@ -183,21 +191,21 @@ def reward_annotation(pref_port, ref_port, chunked_data_dict, args, thread_idx, 
         drop_last=False,
     )
 
-    all_scores= []
+    all_result_dicts= []
 
     for step, batch in enumerate(tqdm(dataloader, desc="RM batch steps")):
         print(f"RM inference step {step}/{len(dataloader)}")
-        scores = dpo_annotator.monolithic_inference_step(batch)
-        all_scores += scores
+        result_dicts = dpo_annotator.monolithic_inference_step(batch)
+        all_result_dicts += result_dicts
 
-    results[thread_idx] = all_scores 
+    results[thread_idx] = all_result_dicts 
 
 
 def reward_annotation_single(pref_port, ref_port, dataset, args):
     ############################
     # Load reward model pipeline
     ############################
-    
+
     BATCH_SIZE = args.batch_size
     model = {
         "model_name": args.model,
@@ -225,17 +233,28 @@ def reward_annotation_single(pref_port, ref_port, dataset, args):
         drop_last=False,
     )
 
-    all_scores= []
+    all_result_dicts= []
 
     for step, batch in enumerate(tqdm(dataloader, desc="RM batch steps")):
         print(f"RM inference step {step}/{len(dataloader)}")
-        scores = dpo_annotator.monolithic_inference_step(batch)
-        all_scores += scores
-    return all_scores
+        result_dicts = dpo_annotator.monolithic_inference_step(batch)
+        all_result_dicts += result_dicts
+    return all_result_dicts
 
+def singular_classifier_thread(model_name, device_id, chunked_data_dict, results):
+    chunk_data_hf = chunked_data_dict[device_id]
+    chunk_data = [instance['messages'] for instance in chunk_data_hf]
+    from src.models import ArmoRMPipeline
+    armopipeline = ArmoRMPipeline(model_name, device=device_id)
+    chunk_scores, _ = armopipeline(chunk_data)
+    results[device_id] = chunk_scores
 
 def main():
     args = get_args()
+    if args.model_type != "dpo":
+        import multiprocessing
+        multiprocessing.set_start_method('spawn')
+    
     accelerator = Accelerator()
 
     ###############
@@ -257,32 +276,44 @@ def main():
     if args.trust_remote_code:
         logger.info("Loading model with Trust Remote Code")
 
-    if args.model in DPO_MODEL_CONFIG:
-        config = DPO_MODEL_CONFIG[args.model]
+    if args.model_type == "dpo":
+        if args.model in DPO_MODEL_CONFIG:
+            config = DPO_MODEL_CONFIG[args.model]
+        else:
+            config = DPO_MODEL_CONFIG["default"]
+        logger.info(f"Using dpo model config: {config}")
+        assert args.model != args.ref_model, "policy and reference model should be different"
     else:
-        config = DPO_MODEL_CONFIG["default"]
-    logger.info(f"Using dpo model config: {config}")
+        logger.info(f"Using a sequence classifier reward model: {args.model}")
 
-    tokenizer_builder = config["tokenizer_builder"]
-
-    assert args.model != args.ref_model, "policy and reference model should be different"
+   
     # load chat template
     chat_template = args.chat_template
     conv = get_conv_template(chat_template)
-
 
     ############################
     # Load dataset
     ############################
     logger.info("*** Load dataset ***")
     tokenizer_path = args.tokenizer if args.tokenizer else args.model
-    tokenizer = tokenizer_builder(tokenizer_path, trust_remote_code=args.trust_remote_code)
+    
+    # retry loading tokenizer for 5 times, then throw error
+    max_retry = 5
+    for i in range(max_retry):
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=args.trust_remote_code)
+            break
+        except:
+            if i == max_retry - 1:
+                raise ValueError(f"Failed to load tokenizer after {max_retry} retries")
+            print(f"Failed to load tokenizer, retrying...")
     tokenizer.pad_token = tokenizer.eos_token
 
-
-    # The custom dataset must be made in to messages format:
-    # [{content:  , role:  } ]
-    custom_dataset, input_dataset = load_ibm_bon_data(args.pref_sets, debug=args.debug)
+    custom_dataset, input_dataset = load_ibm_bon_data(args.input_path, debug=args.debug)
+    
+    print("#################### Example Prompt Messages ####################\n")
+    print(custom_dataset[0]["prompt"])
+    print("\n#################### End Prompt Messages ####################")
 
     # modify the load_eval_dataset to be handling single column outputs. 
     simple_dataset = load_simple_dataset(
@@ -290,31 +321,27 @@ def main():
         conv=conv,
         tokenizer=tokenizer,
         logger=logger,
-        keep_columns=["formatted_output", "prompt", "original_prompt", "response"],
+        keep_columns=["formatted_output", "prompt", "original_prompt", "response", "messages"],
+        max_prompt_length=args.max_prompt_length
     )
 
     # save_dir
     if not args.save_dir:
         # write sth when dataset name is not available
-        if args.pref_sets:
-            save_dir = os.path.dirname(args.pref_sets) + "/" + args.model
+        if args.input_path:
+            save_dir = os.path.dirname(args.input_path) + "/" + args.model
         else:
             save_dir = "./" + args.model
     else:
         save_dir = args.save_dir
     logger.info(f"Results to be saved to the following directory: {save_dir}")
 
-    # define reference free
-    if args.ref_model is None:
-        ref_free = True
-        logger.info("Running reference free DPO - no reference model provided")
-    else:
-        ref_free = False
-        logger.info(f"Running DPO with reference model {args.ref_model}")
-
     ############################
     # Multi-threading to leverage multiple threads to increase throughput
     ############################
+    if args.model_type != "dpo":
+        logger.info("Using a sequence classifier reward model")
+
     if not args.debug:
         manager = Manager()
         results = manager.dict()
@@ -322,7 +349,7 @@ def main():
         chunked_data_dict = {}
         base_port = args.base_port
         gpu_chunk_size = int(len(simple_dataset)/args.num_threads)+1
-
+  
         for thread_idx in range(args.num_threads):
 
             start_idx = thread_idx * gpu_chunk_size
@@ -332,12 +359,17 @@ def main():
             pref_port = base_port
             ref_port = base_port + 1
             base_port+=2
-            # currently, it's sequential, needs to make it distributed.
-            # only apply on non-empty cases
+
             if thread_dataset and len(thread_dataset)>0:
-                processes.append(
-                    Process(target=reward_annotation, args=(pref_port, ref_port, chunked_data_dict, args, thread_idx, results)),
-                )
+                if args.model_type == "dpo":
+                    processes.append(
+                        Process(target=reward_annotation, args=(pref_port, ref_port, chunked_data_dict, args, thread_idx, results)),
+                    )
+                else:
+                    processes.append(
+                        Process(target=singular_classifier_thread, args=(args.model, thread_idx, chunked_data_dict, results)),
+                    )
+     
         for process in processes:
             process.start()
 
@@ -349,17 +381,48 @@ def main():
             if thread_idx in results and results[thread_idx]:
                 final_scores.extend(results[thread_idx])
     else:
-        final_scores = reward_annotation_single(args.base_port, args.base_port + 1, simple_dataset, args)
+        if args.model_type == "dpo":
+            final_scores = reward_annotation_single(args.base_port, args.base_port + 1, simple_dataset, args)
+        else:
+            from src.models import ArmoRMPipeline
+            input_data = [instance['messages'] for instance in simple_dataset]
+            armopipeline = ArmoRMPipeline(args.model, device=0)
+            final_scores, _ = armopipeline(input_data)
 
 
     ############################
     # Print & process results
     ############################
-    # add column for results for easy printing
-    raw_out_dataset = simple_dataset.add_column("results", final_scores)
+    
+    # final_scores: List[Dict[str, List]] or List[int]
+    
+    if type(final_scores[0]) == float:
+        # add column for results for easy printing
+        raw_out_dataset = simple_dataset.add_column("results", final_scores)
+    elif type(final_scores[0]) == dict:
+        # decompose the result dict into different columns
+        # final_reward = {
+        #     "log-ratio-rewards": chosen_rewards_batch,
+        #     "generated_tokens_pref": generated_tokens_pref_batch, 
+        #     "logprobs_pref": generated_logprobs_pref_batch
+        #     "generated_tokens_ref": generated_tokens_ref_batch, 
+        #     "logprobs_ref": generated_logprobs_ref_batch,
+        # }
+        raw_out_dataset = simple_dataset.add_column("results", [ x["log_ratio_reward"] for x in final_scores ])
+        raw_out_dataset = raw_out_dataset.add_column("generated_tokens_pref", [ x["generated_tokens_pref"] for x in final_scores ])
+        raw_out_dataset = raw_out_dataset.add_column("logprobs_pref", [ x["logprobs_pref"] for x in final_scores ])
+        raw_out_dataset = raw_out_dataset.add_column("generated_tokens_ref", [ x["generated_tokens_ref"] for x in final_scores ])
+        raw_out_dataset = raw_out_dataset.add_column("logprobs_ref", [ x["logprobs_ref"] for x in final_scores ])
+
+    else:
+        raise ValueError("Final scores should be either a list of integers or a list of dictionaries")
 
     best_of_n_samples, rewards_ls, samples_to_reward_dicts = [], [], []
 
+    # create lists for generated tokens and logprobs
+    generated_tokens_pref_ls, generated_tokens_ref_ls = [], []
+    logprobs_pref_ls, logprobs_ref_ls = [], []
+    
     best_of_n = int(len(raw_out_dataset)/len(input_dataset))
     print("best-of-n is", best_of_n)
 
@@ -369,6 +432,10 @@ def main():
         
         reward_dict = {}
         per_instance_rewards = []
+        per_instance_generated_tokens_pref = []
+        per_instance_generated_tokens_ref = []
+        per_instance_logprobs_pref = []
+        per_instance_logprobs_ref = []
         
         # saninty check
         for in_idx, ex in enumerate(mapped_outputs):
@@ -378,31 +445,49 @@ def main():
             assert instance["output"][in_idx] == ex["response"], "original order is being disrupted"
             reward_dict[ex["response"]] = ex["results"]
             per_instance_rewards.append(ex["results"])
+            if type(final_scores[0]) != float:
+                # add the generated tokens and logprobs
+                per_instance_generated_tokens_pref.append(ex["generated_tokens_pref"])
+                per_instance_generated_tokens_ref.append(ex["generated_tokens_ref"])
+                per_instance_logprobs_pref.append(ex["logprobs_pref"])
+                per_instance_logprobs_ref.append(ex["logprobs_ref"])
 
         best_of_n_samples.append(max(reward_dict, key=reward_dict.get))
         rewards_ls.append(per_instance_rewards)
+        if type(final_scores[0]) != float:
+            # append logprobs and generated tokens
+            generated_tokens_pref_ls.append(per_instance_generated_tokens_pref)
+            generated_tokens_ref_ls.append(per_instance_generated_tokens_ref)
+            logprobs_pref_ls.append(per_instance_logprobs_pref)
+            logprobs_ref_ls.append(per_instance_logprobs_ref)
+            
         samples_to_reward_dicts.append(reward_dict)
     
     # give a best of N response, along with scoring dict: with score matching each output.  
     input_dataset = input_dataset.add_column("best_of_n_sample", best_of_n_samples)
     
     best_of_n_equal_target = [best_of_n_samples[i]==input_dataset[i]["target_output"] for i in range(len(best_of_n_samples))]
-    
+
     input_dataset = input_dataset.add_column("target_is_bestn", best_of_n_equal_target)
     
     input_dataset = input_dataset.add_column("output_reward_scores", rewards_ls)
-    
+    if type(final_scores[0]) != float:
+        # add the generated tokens and logprobs
+        input_dataset = input_dataset.add_column("generated_tokens_pref", generated_tokens_pref_ls)
+        input_dataset = input_dataset.add_column("generated_tokens_ref", generated_tokens_ref_ls)
+        input_dataset = input_dataset.add_column("logprobs_pref", logprobs_pref_ls)
+        input_dataset = input_dataset.add_column("logprobs_ref", logprobs_ref_ls)
 
-    output_filename = os.path.basename(args.pref_sets)+"-rewards.jsonl"
+    output_filename = os.path.basename(args.input_path)+"-rewards.jsonl"
 
     output_save_path = os.path.join(save_dir, output_filename)
     input_dataset.to_json(output_save_path)
 
-    raw_output_save_path = output_save_path+"-raw.jsonl"
-    save_to_local(
-            raw_out_dataset, 
-            raw_output_save_path
-        )
+    # raw_output_save_path = output_save_path+"-raw.jsonl"
+    # save_to_local(
+    #         raw_out_dataset, 
+    #         raw_output_save_path
+    #     )
     # logger.info(f"Uploading chosen-rejected text with scores to {scores_url}")
 
 

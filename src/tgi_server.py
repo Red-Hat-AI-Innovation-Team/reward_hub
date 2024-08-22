@@ -4,10 +4,8 @@ import concurrent.futures
 import time
 import requests
 from huggingface_hub import InferenceClient
-
-
-
-
+# This file is stale
+# TO-DO: Add TGI capability if needed.
 
 class TGI:
     def __init__(self, port=8000):
