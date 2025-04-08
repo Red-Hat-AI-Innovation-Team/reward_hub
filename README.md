@@ -44,8 +44,8 @@ These scripts offer ready-to-use templates to help users get started quickly.
 Clone the repository and install the necessary dependencies:
 
 ```bash
-git clone https://github.com/gx-ai-architect/openPref.git
-cd openPref
+git clone https://github.com/Red-Hat-AI-Innovation-Team/reward_hub.git
+cd reward_hub
 pip install -e .
 ```
 
