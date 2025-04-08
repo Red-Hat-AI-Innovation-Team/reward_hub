@@ -1,10 +1,10 @@
-# openPref
+# RewardHub
 
-**openPref** is an end-to-end library for annotating data using state-of-the-art (SoTA) reward models, critic functions, and related processes. It is designed to facilitate the generation of preference training data or define acceptance criteria for agentic or inference scaling systems such as Best-of-N sampling or Beam-Search.
+**RewardHub** is an end-to-end library for annotating data using state-of-the-art (SoTA) reward models, critic functions, and related processes. It is designed to facilitate the generation of preference training data or define acceptance criteria for agentic or inference scaling systems such as Best-of-N sampling or Beam-Search.
 
 ## Research
 
-**openPref** serves as the official implementation of the paper:  
+**RewardHub** serves as the official implementation of the paper:  
 [**CDR: Customizable Density Ratios of Strong-over-Weak LLMs for Preference Annotation**](https://arxiv.org/pdf/2411.02481)  
 
 The paper introduces CDR, a novel approach to generating high-quality preference annotations using density ratios tailored to domain-specific needs.
