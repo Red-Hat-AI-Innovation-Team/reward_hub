@@ -55,11 +55,11 @@ class PRMResult:
     """
     full result of process reward model
     """
-    def __init__(self, step_scores: str = None, aggregate_method: str = None):
-        self.step_scores = step_scores
-        self.product = math.prod(step_scores)
-        self.min = min(step_scores)
-        self.last = step_scores[-1]
+    def __init__(self, scores: str = None, aggregate_method: str = None):
+        self.step_scores = scores
+        self.product = math.prod(scores)
+        self.min = min(scores)
+        self.last = scores[-1]
 
         if aggregate_method == "prod":
             self.score = self.product
