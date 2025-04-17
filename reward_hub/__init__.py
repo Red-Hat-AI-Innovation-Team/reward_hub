@@ -16,9 +16,9 @@
 
 from .base import AbstractAutoRewardModel, AbstractOutcomeRewardModel, AbstractProcessRewardModel
 from .utils import SUPPORTED_MODELS
-from reward_hub.src.hf.reward import HuggingFaceOutcomeRM, HuggingFaceProcessRM
-from reward_hub.src.vllm.reward import VLLMOutcomeRM, VLLMProcessRM
-from reward_hub.src.openai.reward import OpenAIOutcomeRM, OpenAIProcessRM
+from reward_hub.hf.reward import HuggingFaceOutcomeRM, HuggingFaceProcessRM
+from reward_hub.vllm.reward import VLLMOutcomeRM, VLLMProcessRM
+from reward_hub.openai.reward import OpenAIOutcomeRM, OpenAIProcessRM
 
 
 
