@@ -18,7 +18,8 @@ def test_vllm_prm_prod_aggregation():
         question=question,
         responses=responses,
         aggregate_method="prod",
-        return_full_prm_result=False
+        return_full_prm_result=False,
+        batch_size=8
     )
     assert len(scores_prod) == len(responses)
     assert all(isinstance(score, float) for score in scores_prod)
@@ -39,7 +40,8 @@ def test_vllm_prm_last_aggregation():
         question=question,
         responses=responses,
         aggregate_method="last",
-        return_full_prm_result=False
+        return_full_prm_result=False,
+        batch_size=8
     )
     assert len(scores_last) == len(responses)
     assert all(isinstance(score, float) for score in scores_last)
@@ -60,7 +62,8 @@ def test_vllm_prm_full_results():
         question=question,
         responses=responses,
         aggregate_method="min",
-        return_full_prm_result=True
+        return_full_prm_result=True,
+        batch_size=8
     )
     assert len(full_results) == len(responses)
     assert all(isinstance(result, PRMResult) for result in full_results)
@@ -81,7 +84,8 @@ def test_vllm_prm_model_aggregation():
         question=question,
         responses=responses,
         aggregate_method="model_aggregate",
-        return_full_prm_result=False
+        return_full_prm_result=False,
+        batch_size=8
     )
     assert len(model_agg_scores) == len(responses)
     assert all(isinstance(score, float) for score in model_agg_scores)
