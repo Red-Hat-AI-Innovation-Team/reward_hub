@@ -31,22 +31,13 @@ setup(
     ],
     python_requires=">=3.10",
     install_requires=[
-        "accelerate",
-        "bitsandbytes",
         "black",
-        "fire",
         "datasets",
-        "deepspeed",
-        "einops",
         "flake8>=6.0",
-        "fschat[model_worker,webui]",
         "huggingface_hub",
         "isort>=5.12.0",
         "pandas",
-        "peft",
         "pytest",
-        "scipy",
-        "tabulate",  # dependency for markdown rendering in pandas
         "tokenizers",
         "transformers",  # needed for some late models, may need to bump in the future
     ],
