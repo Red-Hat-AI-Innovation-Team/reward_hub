@@ -13,9 +13,9 @@
 # limitations under the License.
 
 
-from reward_hub.src.hf.reward import HuggingFaceOutcomeRM, HuggingFaceProcessRM
-from reward_hub.src.vllm.reward import VLLMOutcomeRM, VLLMProcessRM
-from reward_hub.src.openai.reward import OpenAIOutcomeRM, OpenAIProcessRM
+from reward_hub.hf.reward import HuggingFaceOutcomeRM, HuggingFaceProcessRM
+from reward_hub.vllm.reward import VLLMOutcomeRM, VLLMProcessRM
+from reward_hub.openai.reward import OpenAIOutcomeRM, OpenAIProcessRM
 
 
 SUPPORTED_MODELS = {

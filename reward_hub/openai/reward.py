@@ -13,7 +13,7 @@
 # limitations under the License.
 
 
-from reward_hub.src.base import AbstractOutcomeRewardModel, AbstractProcessRewardModel
+from reward_hub.base import AbstractOutcomeRewardModel, AbstractProcessRewardModel
 
 class OpenAIOutcomeRM(AbstractOutcomeRewardModel):
     def __init__(self, model_name: str, **kwargs):

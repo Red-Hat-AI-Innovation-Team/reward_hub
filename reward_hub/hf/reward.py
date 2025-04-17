@@ -20,7 +20,7 @@ from transformers import (
     AutoModel
 )
 from typing import Union, List
-from reward_hub.src.base import AbstractOutcomeRewardModel, AbstractProcessRewardModel, PRMResult
+from reward_hub.base import AbstractOutcomeRewardModel, AbstractProcessRewardModel, PRMResult
 
 
 # Design Issues:
@@ -32,7 +32,7 @@ from reward_hub.src.base import AbstractOutcomeRewardModel, AbstractProcessRewar
 
 
 class HuggingFaceOutcomeRM(AbstractOutcomeRewardModel):
-    def __init__(self, model_name: str, device_map: str, **kwargs):
+    def __init__(self, model_name: str, device_map: Union[str, int], **kwargs):
         self.model_name = model_name
         self.model = AutoModel.from_pretrained(
                         model_name,
@@ -104,7 +104,7 @@ class HuggingFaceOutcomeRM(AbstractOutcomeRewardModel):
 
 
 class HuggingFaceProcessRM(AbstractProcessRewardModel):
-    def __init__(self, model_name: str, device_map: str, **kwargs):
+    def __init__(self, model_name: str, device_map: Union[str, int], **kwargs):
         self.model_name = model_name
         self.model = AutoModelForCausalLM.from_pretrained(
                         model_name,
