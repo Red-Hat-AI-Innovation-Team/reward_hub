@@ -15,7 +15,7 @@
 from setuptools import find_packages, setup
 
 setup(
-    name="prefgen",
+    name="reward_hub",
     version="0.1.0.dev",
     author="GX Xu",
     author_email="gx.xu@ibm.com",
