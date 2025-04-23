@@ -25,4 +25,3 @@ SUPPORTED_MODELS = {
     "PRIME-RL/EurusPRM-Stage2": [HuggingFaceProcessRM],
     "RLHFlow/Llama3.1-8B-PRM-Deepseek-Data": [HuggingFaceProcessRM],
 }
-

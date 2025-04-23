@@ -13,69 +13,37 @@
 # limitations under the License.
 
 
-import subprocess
-from subprocess import Popen,PIPE
 import concurrent.futures
 import time
 import requests
 
-class VLLM:
-    def __init__(self, model_name="mistralai/Mixtral-8X7B-Instruct-v0.1", port=8000):
-        # launch the VLLM serving here in init
-        """
-        "bash scripts/vllm_server_ccc.sh {} {} {} {}".format(
-            self.model_name, self.port, self.num_gpus, self.download_dir
-        ),
-
-        """
+class vllmClient:
+    def __init__(self, model_name, port):
         self.model_name = model_name
         self.port = port
-
     
-    def create_prompt(self, input_prompt: str, predictions: str) -> str:
-        """
-        input_prompt can take 2 forms:
-        1. Direction question.
-        2. Human: ... \\n\\nAssistant: \\n\\nAssistant:
-        
-        predictions is always a direct response to user input prompt.
-        """
-        if "Human:" in input_prompt:
-            res = self.multi_turn_prompt_template
-            res = res.format(conversation=input_prompt, prediction=predictions)
-        else:
-            res = self.single_turn_prompt_template
-            res = res.format(question=input_prompt, prediction=predictions)
-        return res
-
     def make_vllm_request(  # noqa
         self,
         batch_prompts,
-        port="8000",
-        model_name="mistralai/Mixtral-8X7B-Instruct-v0.1",
-        decoding_method="greedy",
-        max_new_tokens=500,
-        temperature=1.0,
+        max_new_tokens=4096,
+        temperature=0.8,
         top_k=50,
         top_p=0.85,
-        stop_sequences=["User", "Assistant"],
+        stop_sequences=None,
         num_workers=40,
         logprobs = 0,
-        echo = False
+        echo = False,
+        use_beam_search=False,
     ):
         """Sampling parameters for text generation.
         Only batch_prompts is required to run it.
         logprobs = 0, do not return log probs in the result;
         echo = False, do not return log probs for inputs 
         """
+        port = self.port
+        model_name = self.model_name
         endpoint=f"http://localhost:{port}/v1/completions"
 
-        # server may very well not be up
-
-        if "beam" in decoding_method:
-            use_beam_search = True
-        else:
-            use_beam_search = False
 
         headers = {"Content-type": "application/json"}
 
@@ -109,11 +77,7 @@ class VLLM:
         if not num_workers:
             num_workers = len(batch_prompts)
         else:
-            # number of workers can not be more than batch_size
             num_workers = min(num_workers, len(batch_prompts))
-
-        # Print the number of workers used for each batch of VLLM requests
-        # print("Number of workers: ", num_workers)
 
         def create_request_instance(prompt_str, stop_sequences):
             request_body = {
@@ -192,14 +156,10 @@ class VLLM:
     def vllm_request_logprobs(  # noqa
         self,
         batch_prompts,
-        port="8000",
-        model_name="mistralai/Mixtral-8X7B-Instruct-v0.1",
         num_workers=40,
     ):
         raw_request_outputs = self.make_vllm_request(  # noqa
             batch_prompts=batch_prompts,
-            port=port,
-            model_name=model_name,
             temperature = 0,
             max_new_tokens=0,
             num_workers=num_workers,
@@ -217,12 +177,6 @@ class VLLM:
 
 
 if __name__ == "__main__":
-    vllm_server = VLLM()
-    # results = vllm_server.make_vllm_request(["i like beijing "], model_name="NousResearch/Nous-Hermes-2-Mistral-7B-DPO")
-    
-    results = vllm_server.vllm_request_logprobs(["i like beijing "]*40, model_name="NousResearch/Nous-Hermes-2-Mistral-7B-DPO", port=8000)
-    breakpoint()
-    results1 = vllm_server.vllm_request_logprobs(["i like beijing "]*40, model_name="teknium/OpenHermes-2.5-Mistral-7B", port=8001)
-    
-    # results1 = vllm_server.make_vllm_request(["User: I don't like eating fish \nAssistant: "]*40)
+    vllm_client = vllmClient(model_name="Qwen/Qwen2.5-32B-instruct", port=8305)
+    results = vllm_client.vllm_request_logprobs(["i like beijing "])
     breakpoint()

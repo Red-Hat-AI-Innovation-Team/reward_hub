@@ -31,10 +31,28 @@ model = AutoRM.load("Qwen/Qwen2.5-Math-PRM-7B", load_method="vllm") # default to
 We support openai api and vllm api. 
 ```python
 from reward_hub import AutoRM
+from reward_hub.openai import DrSow
 
 model = AutoRM.load("gpt-4o", load_method="openai", api_key="your_api_key")
 
 model = AutoRM.load("Qwen/Qwen2.5-Math-PRM-7B", load_method="openai", port=8020)
+
+```
+
+### DrSow reward
+We support DrSow reward model. 
+
+```python
+from reward_hub.openai import DrSow, DrSowConfig
+
+drsow_config = DrSowConfig(
+    strong_model_name="Qwen/Qwen2.5-32B-instruct",
+    strong_port=8305,
+    weak_model_name="Qwen/Qwen2.5-32B",
+    weak_port=8306
+    )
+
+model = OpenAIOutcomeRM(model_name="drsow", drsow_config=drsow_config)
 ```
 
 #### Inference:
@@ -51,6 +69,6 @@ print(scores) # List[float]
 ## Research
 
 **RewardHub** serves as the official implementation of the paper:  
-[**CDR: Customizable Density Ratios of Strong-over-Weak LLMs for Preference Annotation**](https://arxiv.org/pdf/2411.02481)  
+[**Dr. SoW: Density Ratio of Strong-over-weak LLMs for Reducing the Cost of Human Annotation in Preference Tuning**](https://arxiv.org/pdf/2411.02481)  
 
 The paper introduces CDR, a novel approach to generating high-quality preference annotations using density ratios tailored to domain-specific needs.
