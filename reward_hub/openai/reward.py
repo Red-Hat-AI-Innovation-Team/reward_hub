@@ -23,14 +23,8 @@ from typing import Union, List
 from reward_hub.base import AbstractOutcomeRewardModel, AbstractProcessRewardModel, PRMResult
 from openai import OpenAI
 from reward_hub.openai.vllm_client import vllmClient
-from reward_hub.openai.drsow import DrSow
+from reward_hub.drsow import DrSow, DrSowConfig
 
-class DrSowConfig:
-    def __init__(self, strong_model_name: str, strong_port: int, weak_model_name: str, weak_port: int):
-        self.strong_model_name = strong_model_name
-        self.strong_port = strong_port
-        self.weak_model_name = weak_model_name
-        self.weak_port = weak_port
 
 
 class OpenAIOutcomeRM(AbstractOutcomeRewardModel):
@@ -45,6 +39,7 @@ class OpenAIOutcomeRM(AbstractOutcomeRewardModel):
             self.tokenizer = AutoTokenizer.from_pretrained(drsow_config.strong_model_name)
             self.weak_tokenizer = AutoTokenizer.from_pretrained(drsow_config.weak_model_name)
             self.model = DrSow(strong_model, weak_model, self.tokenizer, self.weak_tokenizer)
+            self.tokenizer.truncation_side = "left"
 
         elif port is not None:
             self.model = vllmClient(model_name=model_name, port=port) # TODO: implement vllmClient
@@ -56,7 +51,7 @@ class OpenAIOutcomeRM(AbstractOutcomeRewardModel):
         else:
             raise ValueError("Either port or api_key must be provided")
 
-    def score(self, question: str, responses: List[str], system_prompt: str = None, num_workers: int = 40, return_raw_scores: bool = False, **kwargs) -> List[float]:
+    def score(self, question: str, responses: List[str], system_prompt: str = None, num_workers: int = 40, return_raw_scores: bool = False, max_input_tokens: int = 8192, **kwargs) -> List[float]:
         """
         Score responses to a question using the reward model.
 
@@ -92,7 +87,9 @@ class OpenAIOutcomeRM(AbstractOutcomeRewardModel):
                         }
                     ],
                     add_generation_prompt=False,
-                    tokenize=False
+                    tokenize=False,
+                    max_length=max_input_tokens,
+                    truncation=True,
                 )
                 for response in responses
             ]
@@ -145,33 +142,9 @@ if __name__ == "__main__":
 
     reward_model = OpenAIOutcomeRM(model_name="drsow", drsow_config=drsow_config)
     raw_results = reward_model.score(
-        question="Who is Kai Xu?",
-        responses=["Kai Xu is a bayesian researcher at Red Hat", "Kai Xu is a motherfucker who is a good friend of mine"],
+        question="Who is Michael Jordan?",
+        responses=["Michael Jordan is the greatest basketball player of all time", "Michael Jordan is a good friend of mine who is from Ohio."],
         system_prompt="You are a helpful assistant.",
         return_raw_scores=True
     )
-    
-    print("\nFirst result details:")
-    print("---------------------")
-    print(f"DrSow Reward: {raw_results[0]['drsow_reward']:.4f}")
-    print(f"Average DrSow Reward: {raw_results[0]['avg_drsow_reward']:.4f}")
-    print("\nStrong model tokens and logprobs:")
-    for token, logprob in zip(raw_results[0]['strong_generated_tokens'], raw_results[0]['strong_logprobs']):
-        print(f"  {token}: {logprob:.4f}")
-    print("\nWeak model tokens and logprobs:") 
-    for token, logprob in zip(raw_results[0]['weak_generated_tokens'], raw_results[0]['weak_logprobs']):
-        print(f"  {token}: {logprob:.4f}")
-    print("Avg DrSow Reward: ", raw_results[0]['avg_drsow_reward'])
-
-    print("\nSecond result details:")
-    print("---------------------")
-    print(f"DrSow Reward: {raw_results[1]['drsow_reward']:.4f}")
-    print(f"Average DrSow Reward: {raw_results[1]['avg_drsow_reward']:.4f}")
-    print("\nStrong model tokens and logprobs:")
-    for token, logprob in zip(raw_results[1]['strong_generated_tokens'], raw_results[1]['strong_logprobs']):
-        print(f"  {token}: {logprob:.4f}")
-    print("\nWeak model tokens and logprobs:") 
-    for token, logprob in zip(raw_results[1]['weak_generated_tokens'], raw_results[1]['weak_logprobs']):
-        print(f"  {token}: {logprob:.4f}")
-    print("Avg DrSow Reward: ", raw_results[1]['avg_drsow_reward'])
-    breakpoint()
+    print(raw_results)
