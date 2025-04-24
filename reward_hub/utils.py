@@ -18,10 +18,11 @@ from reward_hub.vllm.reward import VLLMOutcomeRM, VLLMProcessRM
 from reward_hub.openai.reward import OpenAIOutcomeRM, OpenAIProcessRM
 
 
-SUPPORTED_MODELS = {
+SUPPORTED_BACKENDS = {
     "Qwen/Qwen2.5-Math-PRM-7B": [VLLMProcessRM, HuggingFaceProcessRM, OpenAIProcessRM],
     "internlm/internlm2-7b-reward": [HuggingFaceOutcomeRM, OpenAIOutcomeRM],
-    "Qwen/Qwen2.5-Math-RM-72B": [VLLMOutcomeRM, HuggingFaceOutcomeRM, OpenAIOutcomeRM],
+    # "Qwen/Qwen2.5-Math-RM-72B": [VLLMOutcomeRM, HuggingFaceOutcomeRM, OpenAIOutcomeRM],
     "PRIME-RL/EurusPRM-Stage2": [HuggingFaceProcessRM],
     "RLHFlow/Llama3.1-8B-PRM-Deepseek-Data": [HuggingFaceProcessRM],
+    "RLHFlow/ArmoRM-Llama3-8B-v0.1": [HuggingFaceOutcomeRM],
 }
