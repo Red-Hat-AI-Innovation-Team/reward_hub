@@ -1,6 +1,8 @@
 import pytest
 from reward_hub.vllm.reward import VLLMProcessRM
-from reward_hub.base import PRMResult
+from reward_hub.base import PRMResult, AggregationMethod
+from typing import List, Union
+import math
 
 def test_vllm_prm_prod_aggregation():
     model = VLLMProcessRM(
@@ -17,7 +19,7 @@ def test_vllm_prm_prod_aggregation():
     scores_prod = model.score(
         question=question,
         responses=responses,
-        aggregate_method="prod",
+        aggregation_method=AggregationMethod.PRODUCT,
         return_full_prm_result=False,
     )
     assert len(scores_prod) == len(responses)
@@ -38,7 +40,7 @@ def test_vllm_prm_last_aggregation():
     scores_last = model.score(
         question=question,
         responses=responses,
-        aggregate_method="last",
+        aggregation_method=AggregationMethod.LAST,
         return_full_prm_result=False,
     )
     assert len(scores_last) == len(responses)
@@ -59,7 +61,7 @@ def test_vllm_prm_full_results():
     full_results = model.score(
         question=question,
         responses=responses,
-        aggregate_method="min",
+        aggregation_method=AggregationMethod.MINIMUM,
         return_full_prm_result=True,
     )
     assert len(full_results) == len(responses)
@@ -80,7 +82,7 @@ def test_vllm_prm_model_aggregation():
     model_agg_scores = model.score(
         question=question,
         responses=responses,
-        aggregate_method="model_aggregate",
+        aggregation_method=AggregationMethod.MODEL,
         return_full_prm_result=False,
     )
     assert len(model_agg_scores) == len(responses)
@@ -95,5 +97,5 @@ def test_vllm_prm_invalid_model():
         model.score(
             question="test",
             responses=["test"],
-            aggregate_method="last"
+            aggregation_method=AggregationMethod.LAST
         )

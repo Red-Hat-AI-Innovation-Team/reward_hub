@@ -21,7 +21,7 @@ from transformers import (
     AutoModelForSequenceClassification
 )
 from typing import Union, List
-from reward_hub.base import AbstractOutcomeRewardModel, AbstractProcessRewardModel, PRMResult
+from reward_hub.base import AbstractOutcomeRewardModel, AbstractProcessRewardModel, PRMResult, AggregationMethod
 
 
 class HuggingFaceOutcomeRM(AbstractOutcomeRewardModel):
@@ -126,20 +126,27 @@ class HuggingFaceProcessRM(AbstractProcessRewardModel):
             self.tokenizer.truncation_side = "left"
 
 
-    def score(self, question: str, responses: List[str], step_separator: str = "\n\n", aggregate_method: str = "last", return_full_prm_result: bool = False, max_input_tokens: int = 8192) -> List[Union[PRMResult, float]]:
+    def score(self, question: str, responses: List[str], step_separator: str = "\n\n", 
+              aggregation_method: Union[AggregationMethod, str] = AggregationMethod.LAST, 
+              return_full_prm_result: bool = False, max_input_tokens: int = 8192) -> List[Union[PRMResult, float]]:
         """
         if return_full_prm_result is True, return the PRMResult object.     
         if return_full_prm_result is False, return the score.
         """
-        if aggregate_method not in ["prod", "min", "last", "model_aggregate"]:
-            raise ValueError(f"Invalid aggregate method: {aggregate_method}")
+        # Convert string to enum if needed for backward compatibility
+        if isinstance(aggregation_method, str):
+            try:
+                aggregation_method = next(method for method in AggregationMethod if method.value == aggregation_method)
+            except StopIteration:
+                valid_methods = [method.value for method in AggregationMethod]
+                raise ValueError(f"Invalid aggregate method: '{aggregation_method}'. Valid methods: {valid_methods}")
+        
         all_scores = []
         if self.model_name == "RLHFlow/Llama3.1-8B-PRM-Deepseek-Data":
-
             for ans in responses:
                 step_scores = []
                 conversation = []
-                if aggregate_method == "model_aggregate":
+                if aggregation_method == AggregationMethod.MODEL:
                     ans_list = [ans]
                 else:
                     ans_list = ans.split(step_separator)
@@ -172,7 +179,7 @@ class HuggingFaceProcessRM(AbstractProcessRewardModel):
         elif self.model_name == "Qwen/Qwen2.5-Math-PRM-7B":
             formatted_convs = []
             for ans in responses:
-                if aggregate_method == "model_aggregate":
+                if aggregation_method == AggregationMethod.MODEL:
                     steps_list = [ans]    
                 else:
                     steps_list = ans.split(step_separator)
@@ -208,9 +215,9 @@ class HuggingFaceProcessRM(AbstractProcessRewardModel):
             raise ValueError(f"Model {self.model_name} is not supported")
         
         if return_full_prm_result:
-            return [PRMResult(scores=scores, aggregate_method=aggregate_method) for scores in all_scores]
+            return [PRMResult(scores=scores, aggregation_method=aggregation_method) for scores in all_scores]
         else:
-            return [PRMResult(scores=scores, aggregate_method=aggregate_method).score for scores in all_scores]
+            return [PRMResult(scores=scores, aggregation_method=aggregation_method).score for scores in all_scores]
 
 if __name__ == "__main__":
     output1 = """Let me solve this step by step:
