@@ -93,7 +93,3 @@ Therefore, x = 4."""
         
         # Correct answer should have higher score
         self.assertGreater(scores[0], scores[1])
-
-
-if __name__ == "__main__":
-    unittest.main()
