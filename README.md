@@ -14,57 +14,100 @@ cd reward_hub
 pip install -e .
 ```
 
+### Usage Examples
 
-### **Supported Reward Serving / APIs**
+RewardHub supports multiple types of reward models and serving methods. Here are the main ways to use the library:
 
-#### Local Serving
-We support huggingface and local vllm serving. 
+#### Process Reward Models (PRM)
+PRMs evaluate responses by analyzing the reasoning process:
 
 ```python
 from reward_hub import AutoRM
 
-model = AutoRM.load("Qwen/Qwen2.5-Math-PRM-7B", load_method="vllm") # default to using hf loading
+# Load a math-focused PRM using HuggingFace backend
+model = AutoRM.load("Qwen/Qwen2.5-Math-PRM-7B", load_method="hf", device=0)
 
+# Example conversation
+messages = [
+    [
+        {"role": "user", "content": "What is 2+2?"},
+        {"role": "assistant", "content": "Let me solve this step by step:\n1) 2 + 2 = 4\nTherefore, 4"}
+    ]
+]
+
+# Get scores with full PRM results
+results = model.score(messages, return_full_prm_result=True)
+# Or just get the scores
+scores = model.score(messages, return_full_prm_result=False)
 ```
 
-#### Remote API access
-We support openai api and vllm api. 
+#### Outcome Reward Models (ORM)
+ORMs focus on evaluating the final response quality:
+
 ```python
 from reward_hub import AutoRM
-from reward_hub.openai import DrSow
 
-model = AutoRM.load("gpt-4o", load_method="openai", api_key="your_api_key")
+# Load an ORM using HuggingFace backend
+model = AutoRM.load("internlm/internlm2-7b-reward", load_method="hf", device=0)
 
-model = AutoRM.load("Qwen/Qwen2.5-Math-PRM-7B", load_method="openai", port=8020)
-
+scores = model.score([
+    [
+        {"role": "user", "content": "What is 2+2?"},
+        {"role": "assistant", "content": "The answer is 4."}
+    ]
+])
 ```
 
-### DrSow reward
-We support DrSow reward model. 
+#### DrSow Reward Model
+DrSow uses density ratios between strong and weak models to evaluate responses:
+
+Launch the strong and weak models first.
+
+```bash
+bash scripts/launch_drsow.sh Qwen/Qwen2.5-32B-instruct Qwen/Qwen2.5-32B
+```
+
+Then, you can launch client reward servers to acces the DrSow reward model.
 
 ```python
-from reward_hub.openai import DrSow, DrSowConfig
+from reward_hub import AutoRM
+from reward_hub.openai import DrSowConfig
+
 
 drsow_config = DrSowConfig(
     strong_model_name="Qwen/Qwen2.5-32B-instruct",
     strong_port=8305,
     weak_model_name="Qwen/Qwen2.5-32B",
     weak_port=8306
-    )
-
-model = OpenAIOutcomeRM(model_name="drsow", drsow_config=drsow_config)
-```
-
-#### Inference:
-```python
-scores = model.score(
-    question = "How are you doing today?",
-    responses = ["I am doing well, thank you for asking.", "I am doing great, thanks for asking!"],
 )
 
-print(scores) # List[float]
+model = AutoRM.load("drsow", load_method="openai", drsow_config=drsow_config)
+
+# Get scores for responses
+scores = model.score([
+    [
+        {"role": "user", "content": "What is 2+2?"},
+        {"role": "assistant", "content": "The answer is 4."}
+    ]
+])
 ```
 
+### Supported Backends
+
+RewardHub supports multiple serving backends:
+
+- **HuggingFace** (`load_method="hf"`): Direct local model loading
+- **VLLM** (`load_method="vllm"`): Optimized local serving
+- **OpenAI API** (`load_method="openai"`): Remote API access
+
+### Supported Models
+
+We support various reward models including:
+- Qwen Math PRM
+- InternLM2 Reward
+- ArmoRM
+- DrSow
+- And more...
 
 ## Research
 
