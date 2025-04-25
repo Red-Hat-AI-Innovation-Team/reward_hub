@@ -13,16 +13,16 @@
 # limitations under the License.
 
 
-from reward_hub.hf.reward import HuggingFaceOutcomeRM, HuggingFaceProcessRM
-from reward_hub.vllm.reward import VLLMOutcomeRM, VLLMProcessRM
-from reward_hub.openai.reward import OpenAIOutcomeRM, OpenAIProcessRM
+from reward_hub.hf.reward import HuggingFaceOutcomeRewardModel, HuggingFaceProcessRewardModel
+from reward_hub.vllm.reward import VllmOutcomeRewardModel, VllmProcessRewardModel
+from reward_hub.openai.reward import OpenAIOutcomeRewardModel, OpenAIProcessRewardModel
 
 
 SUPPORTED_BACKENDS = {
-    "Qwen/Qwen2.5-Math-PRM-7B": [VLLMProcessRM, HuggingFaceProcessRM, OpenAIProcessRM],
-    "internlm/internlm2-7b-reward": [HuggingFaceOutcomeRM, OpenAIOutcomeRM],
-    # "Qwen/Qwen2.5-Math-RM-72B": [VLLMOutcomeRM, HuggingFaceOutcomeRM, OpenAIOutcomeRM],
-    "PRIME-RL/EurusPRM-Stage2": [HuggingFaceProcessRM],
-    "RLHFlow/Llama3.1-8B-PRM-Deepseek-Data": [HuggingFaceProcessRM],
-    "RLHFlow/ArmoRM-Llama3-8B-v0.1": [HuggingFaceOutcomeRM],
+    "Qwen/Qwen2.5-Math-PRM-7B": [VllmProcessRewardModel, HuggingFaceProcessRewardModel, OpenAIProcessRewardModel],
+    "internlm/internlm2-7b-reward": [HuggingFaceOutcomeRewardModel, OpenAIOutcomeRewardModel],
+    # "Qwen/Qwen2.5-Math-RM-72B": [VllmOutcomeRewardModel, HuggingFaceOutcomeRewardModel, OpenAIOutcomeRewardModel],
+    # "PRIME-RL/EurusPRM-Stage2": [HuggingFaceProcessRewardModel],
+    "RLHFlow/Llama3.1-8B-PRM-Deepseek-Data": [HuggingFaceProcessRewardModel],
+    "RLHFlow/ArmoRM-Llama3-8B-v0.1": [HuggingFaceOutcomeRewardModel],
 }
