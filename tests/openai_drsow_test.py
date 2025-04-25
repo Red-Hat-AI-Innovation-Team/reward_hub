@@ -1,4 +1,3 @@
-import pytest
 from reward_hub.openai.reward import OpenAIOutcomeRewardModel
 from reward_hub.drsow import DrSowConfig
 

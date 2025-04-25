@@ -1,4 +1,3 @@
-import pytest
 from reward_hub.hf.reward import HuggingFaceOutcomeRewardModel
 
 class TestHuggingFaceOutcomeRM:

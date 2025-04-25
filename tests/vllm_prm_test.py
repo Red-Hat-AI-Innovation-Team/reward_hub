@@ -1,8 +1,6 @@
 import pytest
 from reward_hub.vllm.reward import VllmProcessRewardModel
 from reward_hub.base import PRMResult, AggregationMethod
-from typing import List, Union
-import math
 
 class TestVLLMProcessRM:
     def test_vllm_prm_prod_aggregation(self):
