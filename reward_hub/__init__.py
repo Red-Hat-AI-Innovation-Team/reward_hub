@@ -15,11 +15,10 @@
 
 
 from .base import AbstractAutoRewardModel, AbstractOutcomeRewardModel, AbstractProcessRewardModel
-from .utils import SUPPORTED_MODELS
+from .utils import SUPPORTED_BACKENDS
 from reward_hub.hf.reward import HuggingFaceOutcomeRM, HuggingFaceProcessRM
 from reward_hub.vllm.reward import VLLMOutcomeRM, VLLMProcessRM
 from reward_hub.openai.reward import OpenAIOutcomeRM, OpenAIProcessRM
-
 
 
 
@@ -44,14 +43,14 @@ class AutoRM(AbstractAutoRewardModel):
             **kwargs: additional keyword arguments passed to the model constructor
                      e.g. api_key for OpenAI models, device for HF models
         """
-        if model_name not in SUPPORTED_MODELS:
-            raise ValueError(f"Model {model_name} is not supported. Supported models: {list(SUPPORTED_MODELS.keys())}")
+        if model_name not in SUPPORTED_BACKENDS:
+            raise ValueError(f"Model {model_name} is not supported. Supported models: {list(SUPPORTED_BACKENDS.keys())}")
             
         if load_method not in load_method_to_class:
             raise ValueError(f"Load method {load_method} is not supported. Supported methods: {list(load_method_to_class.keys())}")
             
         # Get the supported reward model classes for this model
-        supported_rm_classes = SUPPORTED_MODELS[model_name]
+        supported_rm_classes = SUPPORTED_BACKENDS[model_name]
         
         # Get the reward model classes for this load method
         load_method_classes = load_method_to_class[load_method]

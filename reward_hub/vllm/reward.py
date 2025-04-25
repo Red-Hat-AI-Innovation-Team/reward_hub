@@ -23,23 +23,24 @@ from typing import Union, List
 from reward_hub.base import AbstractOutcomeRewardModel, AbstractProcessRewardModel, PRMResult
 import os
 from vllm import LLM
+
+
 class VLLMOutcomeRM(AbstractOutcomeRewardModel):
-    def __init__(self, model_name: str, device_map: Union[str, int], **kwargs):
-        raise NotImplementedError("VLLM_OutcomeRM is not implemented")
-
-    def score(self, question: str, responses: List[str], max_token_length: int = 8192) -> List[float]:
-        raise NotImplementedError("VLLM_OutcomeRM is not implemented")
-
+    def __init__(self, model_name: str, device: Union[str, int], **kwargs):
+        raise NotImplementedError("VLLMOutcomeRM is not implemented")
+    
+    def score(self, question: str, responses: List[str], batch_size: int = 4, max_input_tokens: int = 8192) -> List[float]:
+        raise NotImplementedError("VLLMOutcomeRM is not implemented")
 
 class VLLMProcessRM(AbstractProcessRewardModel):
-    def __init__(self, model_name: str, device_map: Union[str, int], **kwargs):
+    def __init__(self, model_name: str, device: Union[str, int], **kwargs):
         os.environ["VLLM_ALLOW_LONG_MAX_MODEL_LEN"] = "1"
         num_gpus = torch.cuda.device_count()
         print(f"Number of GPUs: {num_gpus}")
         
         self.model = LLM(model=model_name, 
                     task="reward",
-                    device=device_map,
+                    device=device,
                     gpu_memory_utilization=0.8,
                     tensor_parallel_size=1,
                     )
@@ -49,7 +50,7 @@ class VLLMProcessRM(AbstractProcessRewardModel):
             self.tokenizer.truncation_side = "left"
         self.model_name = model_name
 
-    def score(self, question: str, responses: List[str], step_separator: str = "\n\n", aggregate_method: str = None, return_full_prm_result: bool = False, batch_size: int = 4, max_token_length: int = 8192) -> List[Union[PRMResult, float]]:
+    def score(self, question: str, responses: List[str], step_separator: str = "\n\n", aggregate_method: str = "last", return_full_prm_result: bool = False, max_input_tokens: int = 8192) -> Union[List[PRMResult], List[float]]:
         
         if self.model_name == "Qwen/Qwen2.5-Math-PRM-7B":
             formatted_convs = []
@@ -63,7 +64,7 @@ class VLLMProcessRM(AbstractProcessRewardModel):
                     {"role": "system", "content": QWEN_PRM_SYSTEM_PROMPT},
                     {"role": "user", "content": question},
                     {"role": "assistant", "content": "<extra_0>".join(steps_list) + "<extra_0>"},
-                ] # 0.88671875
+                ]
 
                 # Prepare conversation for scoring
                 conversation = self.tokenizer.apply_chat_template(
@@ -73,26 +74,30 @@ class VLLMProcessRM(AbstractProcessRewardModel):
                 )
                 formatted_convs.append(conversation)
 
-            # TODO: tokenize each batch independently so there is less padding and more memory efficient
-            all_scores = []
-            for i in range(0, len(formatted_convs), batch_size):
-                batch = formatted_convs[i:i + batch_size]
-                batch_input_ids = self.tokenizer(
-                    batch,
-                    return_tensors="pt", 
-                    truncation=True,
-                    padding=True,
-                    max_length=max_token_length
-                ).input_ids
-                batch_decoded = self.tokenizer.batch_decode(batch_input_ids, skip_special_tokens=False)
-                batch_outputs = self.model.encode(batch_decoded)
-                batch_scores = [[d[-1].item() for d in ex.outputs.data] for ex in batch_outputs]
-                all_scores.extend(batch_scores)
+            all_input_ids = self.tokenizer(
+                formatted_convs,
+                return_tensors="pt", 
+                truncation=True,
+                padding=True,
+                max_length=max_input_tokens
+            ).input_ids
+            batch_decoded = self.tokenizer.batch_decode(all_input_ids, skip_special_tokens=False)
+            all_outputs = self.model.encode(batch_decoded)
+            all_scores = [[d[-1].item() for d in ex.outputs.data] for ex in all_outputs]
 
         else:
             raise ValueError(f"Model {self.model_name} is not supported")
         
         if return_full_prm_result:
-            return [PRMResult(scores=scores, aggregate_method=aggregate_method) for scores in all_scores]
+            return [PRMResult(scores=scores) for scores in all_scores]
         else:
             return [PRMResult(scores=scores, aggregate_method=aggregate_method).score for scores in all_scores]
+
+
+if __name__ == "__main__":
+    output = """To determine how much Janet makes from selling the duck eggs at the farmers' market, we need to follow these steps:\n\n1. Calculate the total number of eggs laid by the ducks each day.\n2. Determine how many eggs Janet eats and bakes for herself each day.\n3. Find out how many eggs are left to be sold.\n4. Calculate the revenue from selling the remaining eggs at $2 per egg.\n\nLet's start with the first step:\n\n1. Janet's ducks lay 16 eggs per day.\n\nNext, we calculate how many eggs Janet eats and bakes for herself each day:\n\n2. Janet eats 3 eggs for breakfast every morning.\n3. Janet bakes 4 eggs for her friends every day.\n\nSo, the total number of eggs Janet eats and bakes for herself each day is:\n\\[ 3 + 4 = 7 \\text{ eggs} \\]\n\nNow, we find out how many eggs are left to be sold:\n\\[ 16 - 7 = 9 \\text{ eggs} \\]\n\nFinally, we calculate the revenue from selling the remaining eggs at $2 per egg:\n\\[ 9 \\times 2 = 18 \\text{ dollars} \\]\n\nTherefore, Janet makes boxed18 dollars every day at the farmers' market.
+    """
+    model = VLLMOutcomeRM("Qwen/Qwen2.5-Math-RM-72B")
+    out = model.score("Janet's ducks lay 16 eggs per day. She eats three for breakfast every morning and bakes muffins for her friends every day with four. She sells the remainder at the farmers' market daily for $2 per fresh duck egg. How much in dollars does she make every day at the farmers' market?",
+                 [output])
+    breakpoint()

@@ -18,44 +18,11 @@ from abc import ABC, abstractmethod
 import math
 
 
-class AbstractOutcomeRewardModel(ABC):
-    """abstract base class for outcome reward models"""
-
-    @abstractmethod
-    def score(self, question: str, responses: List[str]) -> List[float]:
-        """the reward for the given response"""
-        pass
-
-class AbstractProcessRewardModel(ABC):
-    """abstract base class for process reward models"""
-
-    @abstractmethod
-    def score(self, question: str, responses: List[str], step_sep: str = "\n\n") -> List[List[float]]:
-        """the reward for the given steps"""
-        pass
-
-
-class AbstractAutoRewardModel(ABC):
-    """
-    Wrapper class for reward models.    
-    auto-detect the type of reward model and return the appropriate class
-    """
-
-    @abstractmethod
-    def load(self, model_name: str, load_method: str):
-        """load the reward model
-        supported load methods:
-            - "hf": load from huggingface
-            - "vllm": load from vllm
-            - "openai": load from openai api
-        """
-        pass
-
 class PRMResult:
     """
     full result of process reward model
     """
-    def __init__(self, scores: str = None, aggregate_method: str = None):
+    def __init__(self, scores: List[float], aggregate_method: str = None):
         self.step_scores = scores
         self.product = math.prod(scores)
         self.min = min(scores)
@@ -70,4 +37,43 @@ class PRMResult:
         elif aggregate_method == "model_aggregate":
             self.score = self.last
         else:
-            raise ValueError(f"Invalid aggregate method: {aggregate_method}")
+            self.score = self.last
+
+
+class AbstractOutcomeRewardModel(ABC):
+    """abstract base class for outcome reward models"""
+
+    @abstractmethod
+    def score(self, question: str, responses: List[str], max_input_tokens: int = 8196) -> List[float]:
+        """the reward for the given response"""
+        pass
+
+class AbstractProcessRewardModel(ABC):
+    """abstract base class for process reward models"""
+
+    @abstractmethod
+    def score(self, question: str, responses: List[str], step_sep: str = "\n\n", aggregate_method: str = None, return_full_prm_result: bool = False, max_input_tokens: int = 8196) -> Union[List[PRMResult], List[float]]:
+        """the reward for the given steps"""
+        pass
+
+
+class AbstractAutoRewardModel(ABC):
+    """
+    Wrapper class for reward models.    
+    auto-detect the type of reward model and return the appropriate class
+    """
+
+    @abstractmethod
+    def load(self, model_name: str, load_method: str, device: Union[int, str] = None):
+        """load the reward model
+        supported load methods:
+            - "hf": load from huggingface
+            - "vllm": load from vllm
+            - "openai": load from openai api
+        device:
+            - 0: load the model on device 0 gpu
+            - only single gpu is supported for now
+        """
+        pass
+
+

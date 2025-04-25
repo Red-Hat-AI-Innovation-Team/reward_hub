@@ -17,34 +17,34 @@ import torch
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
-    AutoModel
+    AutoModel,
+    AutoModelForSequenceClassification
 )
 from typing import Union, List
 from reward_hub.base import AbstractOutcomeRewardModel, AbstractProcessRewardModel, PRMResult
 
 
-# Design Issues:
-# Error Handling: The code has minimal error handling, especially for API calls to models that might fail.
-# Hard-coded Model Behavior: Each model's specific behavior is hard-coded in conditional blocks, making it difficult to add new models.
-# Inconsistent Parameter Handling: Some parameters like max_token_length are passed to some models but not others.
-# Limited Abstraction: The base classes AbstractOutcomeRewardModel and AbstractProcessRewardModel aren't leveraged effectively to standardize interfaces.
-# Batch Processing: Only implemented for one model (Qwen2.5-Math-PRM-7B) but not consistently across all models.
-
-
 class HuggingFaceOutcomeRM(AbstractOutcomeRewardModel):
-    def __init__(self, model_name: str, device_map: Union[str, int], **kwargs):
+    def __init__(self, model_name: str, device: Union[str, int], **kwargs):
         self.model_name = model_name
-        self.model = AutoModel.from_pretrained(
+        if model_name == "RLHFlow/ArmoRM-Llama3-8B-v0.1":
+            self.model = AutoModelForSequenceClassification.from_pretrained(
                         model_name,
                         torch_dtype=torch.bfloat16,
-                        device_map=device_map, 
+                        device_map=device, 
+                        trust_remote_code=True
+                    ).eval()
+        else:
+            self.model = AutoModel.from_pretrained(
+                        model_name,
+                        torch_dtype=torch.bfloat16,
+                        device_map=device, 
                         trust_remote_code=True
                     ).eval()
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-        if model_name == "Qwen/Qwen2.5-Math-RM-72B":
-            self.tokenizer.truncation_side = "left"
 
-    def score(self, question: str, responses: List[str], max_token_length: int = 8192) -> List[float]:
+
+    def score(self, question: str, responses: List[str], max_input_tokens: int = 8192) -> List[float]:
         all_scores = []
         if self.model_name == "internlm/internlm2-7b-reward":
             for ans in responses:
@@ -74,7 +74,7 @@ class HuggingFaceOutcomeRM(AbstractOutcomeRewardModel):
                     return_tensors="pt",
                     add_special_tokens=False, 
                     truncation=True, 
-                    max_length=max_token_length
+                    max_length=max_input_tokens
                 ).input_ids.to(self.model.device)
                 raw_outputs = self.model(input_ids=input_ids)
                 reward_score = raw_outputs[0].item()
@@ -91,11 +91,13 @@ class HuggingFaceOutcomeRM(AbstractOutcomeRewardModel):
                     return_tensors="pt",
                     padding=True,
                     truncation=True,
-                    max_length=max_token_length,
+                    max_length=max_input_tokens,
                 ).to(self.model.device)
                 with torch.no_grad():
                     output = self.model(input_ids)
-                    reward_score = output.score.float().item()
+                    # The preference score for the response, aggregated from the 
+                    # multi-objective rewards with the gating layer
+                    reward_score = output.score.cpu().float().item()
                     all_scores.append(reward_score)
         else:
             raise ValueError(f"Model {self.model_name} is not supported")
@@ -104,12 +106,12 @@ class HuggingFaceOutcomeRM(AbstractOutcomeRewardModel):
 
 
 class HuggingFaceProcessRM(AbstractProcessRewardModel):
-    def __init__(self, model_name: str, device_map: Union[str, int], **kwargs):
+    def __init__(self, model_name: str, device: Union[str, int], **kwargs):
         self.model_name = model_name
         self.model = AutoModelForCausalLM.from_pretrained(
                         model_name,
                         torch_dtype=torch.bfloat16,
-                        device_map=device_map, 
+                        device_map=device, 
                         trust_remote_code=True
                     ).eval() 
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
@@ -124,7 +126,7 @@ class HuggingFaceProcessRM(AbstractProcessRewardModel):
             self.tokenizer.truncation_side = "left"
 
 
-    def score(self, question: str, responses: List[str], step_separator: str = "\n\n", aggregate_method: str = None, return_full_prm_result: bool = False, batch_size: int = 4, max_token_length: int = 8192) -> List[Union[PRMResult, float]]:
+    def score(self, question: str, responses: List[str], step_separator: str = "\n\n", aggregate_method: str = "last", return_full_prm_result: bool = False, max_input_tokens: int = 8192) -> List[Union[PRMResult, float]]:
         """
         if return_full_prm_result is True, return the PRMResult object.     
         if return_full_prm_result is False, return the score.
@@ -190,20 +192,17 @@ class HuggingFaceProcessRM(AbstractProcessRewardModel):
                 formatted_convs.append(conversation)
 
             # TODO: tokenize each batch independently so there is less padding and more memory efficient
-            all_scores = []
-            for i in range(0, len(formatted_convs), batch_size):
-                batch = formatted_convs[i:i + batch_size]
-                batch_input_ids = self.tokenizer(
-                    batch,
-                    return_tensors="pt", 
-                    truncation=True,
-                    padding=True,
-                    max_length=max_token_length
-                ).input_ids
-                batch_decoded = self.tokenizer.batch_decode(batch_input_ids, skip_special_tokens=False)
-                batch_outputs = self.model.encode(batch_decoded)
-                batch_scores = [[d[-1].item() for d in ex.outputs.data] for ex in batch_outputs]
-                all_scores.extend(batch_scores)
+
+            all_input_ids = self.tokenizer(
+                formatted_convs,
+                return_tensors="pt", 
+                truncation=True,
+                padding=True,
+                max_length=max_input_tokens
+            ).input_ids
+            all_decoded = self.tokenizer.batch_decode(all_input_ids, skip_special_tokens=False)
+            all_outputs = self.model.encode(all_decoded)
+            all_scores = [[d[-1].item() for d in ex.outputs.data] for ex in all_outputs]
 
         else:
             raise ValueError(f"Model {self.model_name} is not supported")
@@ -212,3 +211,26 @@ class HuggingFaceProcessRM(AbstractProcessRewardModel):
             return [PRMResult(scores=scores, aggregate_method=aggregate_method) for scores in all_scores]
         else:
             return [PRMResult(scores=scores, aggregate_method=aggregate_method).score for scores in all_scores]
+
+if __name__ == "__main__":
+    output1 = """Let me solve this step by step:
+
+    1) First, I'll add 2 and 2
+
+    2) 2 + 2 = 4
+
+    Therefore, 4"""
+
+    output2 = """Let me solve this step by step:
+
+    1) First, I'll add 2 and 2
+
+    2) 2 + 2 = 8
+
+    Therefore, 8"""
+
+    model = HuggingFaceOutcomeRM("RLHFlow/ArmoRM-Llama3-8B-v0.1", device=0)
+    out = model.score("What is 2+2?",
+                 [output1, output2])
+    print(out)
+    breakpoint()

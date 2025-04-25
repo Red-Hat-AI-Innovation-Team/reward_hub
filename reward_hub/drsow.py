@@ -13,11 +13,19 @@
 # limitations under the License.
 
 
-from .vllm_client import vllmClient
+from .openai.vllm_client import vllmClient
 from multiprocessing import Process, Manager
 import torch 
 from transformers import AutoTokenizer
 import numpy as np
+
+
+class DrSowConfig:
+    def __init__(self, strong_model_name: str, strong_port: int, weak_model_name: str, weak_port: int):
+        self.strong_model_name = strong_model_name
+        self.strong_port = strong_port
+        self.weak_model_name = weak_model_name
+        self.weak_port = weak_port
 
 
 class DrSow:
