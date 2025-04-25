@@ -16,29 +16,48 @@
 from typing import Union, List
 from abc import ABC, abstractmethod
 import math
+from enum import Enum
 
+
+class AggregationMethod(Enum):
+    MODEL = "model"
+    PRODUCT = "prod"
+    MINIMUM = "min"
+    LAST = "last"
 
 class PRMResult:
     """
     full result of process reward model
     """
-    def __init__(self, scores: List[float], aggregate_method: str = None):
+    def __init__(self, scores: List[float], aggregation_method: Union[AggregationMethod, str] = AggregationMethod.LAST):
         self.step_scores = scores
         self.product = math.prod(scores)
         self.min = min(scores)
         self.last = scores[-1]
 
-        if aggregate_method == "prod":
+        # Handle both string and enum inputs for backward compatibility
+        if isinstance(aggregation_method, str):
+            try:
+                # Try to convert string to enum
+                aggregation_method = next(method for method in AggregationMethod 
+                                      if method.value == aggregation_method)
+            except StopIteration:
+                valid_methods = [method.value for method in AggregationMethod]
+                raise ValueError(f"Invalid aggregate method: '{aggregation_method}'. "
+                                f"Valid methods are: {valid_methods}")
+        
+        # Now aggregation_method is guaranteed to be an enum
+        if aggregation_method == AggregationMethod.PRODUCT:
             self.score = self.product
-        elif aggregate_method == "last":
+        elif aggregation_method == AggregationMethod.LAST:
             self.score = self.last
-        elif aggregate_method == "min":
+        elif aggregation_method == AggregationMethod.MINIMUM:
             self.score = self.min
-        elif aggregate_method == "model_aggregate":
-            self.score = self.last
         else:
+            # model aggregate method; it only has one step
+            assert len(scores) == 1, "model aggregate method should only have one step"
             self.score = self.last
-
+        
 
 class AbstractOutcomeRewardModel(ABC):
     """abstract base class for outcome reward models"""
@@ -52,7 +71,7 @@ class AbstractProcessRewardModel(ABC):
     """abstract base class for process reward models"""
 
     @abstractmethod
-    def score(self, question: str, responses: List[str], step_sep: str = "\n\n", aggregate_method: str = None, return_full_prm_result: bool = False, max_input_tokens: int = 8196) -> Union[List[PRMResult], List[float]]:
+    def score(self, question: str, responses: List[str], step_sep: str = "\n\n", aggregation_method: str = None, return_full_prm_result: bool = False, max_input_tokens: int = 8196) -> Union[List[PRMResult], List[float]]:
         """the reward for the given steps"""
         pass
 
