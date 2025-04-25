@@ -39,6 +39,7 @@ setup(
         "pandas",
         "pytest",
         "tokenizers",
+        "ruff",
         "transformers",  # needed for some late models, may need to bump in the future
     ],
 )
