@@ -1,18 +1,3 @@
-# Copyright 2025 GX Xu (gxxu@redhat.com)
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-
 import torch
 from transformers import (
     AutoTokenizer,
@@ -234,27 +219,3 @@ class HuggingFaceProcessRewardModel(AbstractProcessRewardModel):
             return [PRMResult(scores=scores, aggregation_method=aggregation_method) for scores in all_scores]
         else:
             return [PRMResult(scores=scores, aggregation_method=aggregation_method).score for scores in all_scores]
-
-if __name__ == "__main__":
-    output1 = """Let me solve this step by step:
-
-    1) First, I'll add 2 and 2
-
-    2) 2 + 2 = 4
-
-    Therefore, 4"""
-
-    output2 = """Let me solve this step by step:
-
-    1) First, I'll add 2 and 2
-
-    2) 2 + 2 = 8
-
-    Therefore, 8"""
-
-    model = HuggingFaceProcessRewardModel("RLHFlow/Llama3.1-8B-PRM-Deepseek-Data", device=0)
-    out = model.score([
-        [{"role": "user", "content": "What is 2+2?"}, {"role": "assistant", "content": output1}],
-        [{"role": "user", "content": "What is 2+2?"}, {"role": "assistant", "content": output2}],
-    ])
-    print(out)
