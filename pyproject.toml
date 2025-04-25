@@ -48,3 +48,6 @@ packages = [
     "reward_hub.vllm",
     "reward_hub.openai"
 ] 
+
+[tool.distutils.bdist_wheel]
+universal = true
