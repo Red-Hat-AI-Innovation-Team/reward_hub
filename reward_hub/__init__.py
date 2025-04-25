@@ -16,16 +16,16 @@
 
 from .base import AbstractAutoRewardModel, AbstractOutcomeRewardModel, AbstractProcessRewardModel
 from .utils import SUPPORTED_BACKENDS
-from reward_hub.hf.reward import HuggingFaceOutcomeRM, HuggingFaceProcessRM
-from reward_hub.vllm.reward import VLLMOutcomeRM, VLLMProcessRM
-from reward_hub.openai.reward import OpenAIOutcomeRM, OpenAIProcessRM
+from reward_hub.hf.reward import HuggingFaceOutcomeRewardModel, HuggingFaceProcessRewardModel
+from reward_hub.vllm.reward import VllmOutcomeRewardModel, VllmProcessRewardModel
+from reward_hub.openai.reward import OpenAIOutcomeRewardModel, OpenAIProcessRewardModel
 
 
 
 load_method_to_class = {
-    "vllm": [VLLMOutcomeRM, VLLMProcessRM],
-    "hf": [HuggingFaceOutcomeRM, HuggingFaceProcessRM],
-    "openai": [OpenAIOutcomeRM, OpenAIProcessRM],
+    "vllm": [VllmOutcomeRewardModel, VllmProcessRewardModel],
+    "hf": [HuggingFaceOutcomeRewardModel, HuggingFaceProcessRewardModel],
+    "openai": [OpenAIOutcomeRewardModel, OpenAIProcessRewardModel]
 }
 
 
@@ -33,9 +33,9 @@ class AutoRM(AbstractAutoRewardModel):
     def load(self, model_name: str, load_method: str, **kwargs):
         """
         load_methods support the following choices:
-            - "vllm": load from python vllm library
-            - "hf": load from huggingface library
-            - "openai": load from openai compatible api
+            - "vllm": load from python vllm backend
+            - "hf": load from huggingface backend
+            - "openai": load model that uses openai compatible api
             
         Args:
             model_name: name of the model to load
@@ -61,4 +61,4 @@ class AutoRM(AbstractAutoRewardModel):
         assert len(valid_classes) == 1, f"Model {model_name} method should give one-on-one mapping {load_method}"
         
         # Initialize the first valid reward model class with kwargs
-        return valid_classes[0](model_name, **kwargs)
+        return list(valid_classes)[0](model_name, **kwargs)

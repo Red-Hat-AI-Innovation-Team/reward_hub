@@ -17,7 +17,8 @@ import torch
 from transformers import (
     AutoTokenizer,
     AutoModel,
-    AutoModelForSequenceClassification
+    AutoModelForSequenceClassification,
+    AutoModelForCausalLM
 )
 from typing import Union, List
 from reward_hub.base import AbstractOutcomeRewardModel, AbstractProcessRewardModel, PRMResult, AggregationMethod
@@ -123,14 +124,14 @@ def make_step_rewards(logits, token_masks):
 class HuggingFaceProcessRewardModel(AbstractProcessRewardModel):
     def __init__(self, model_name: str, device: Union[str, int], **kwargs):
         self.model_name = model_name
-        self.model = AutoModel.from_pretrained(
-                        model_name,
-                        torch_dtype=torch.bfloat16,
-                        device_map=device, 
-                        trust_remote_code=True
-                    ).eval() 
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
         if model_name == "RLHFlow/Llama3.1-8B-PRM-Deepseek-Data":
+            self.model = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                torch_dtype=torch.bfloat16,
+                device_map=device, 
+                trust_remote_code=True
+            ).eval()
             self.tokenizer.padding_side = "right"
             self.tokenizer.pad_token = self.tokenizer.eos_token
             self.model.config.pad_token_id = self.model.config.eos_token_id
@@ -138,10 +139,16 @@ class HuggingFaceProcessRewardModel(AbstractProcessRewardModel):
             minus_tag_id = self.tokenizer.encode("-")[-1]
             self.candidate_tokens = [plus_tag_id, minus_tag_id]
         elif model_name == "Qwen/Qwen2.5-Math-PRM-7B":
+            self.model = AutoModel.from_pretrained(
+                            model_name,
+                            torch_dtype=torch.bfloat16,
+                            device_map=device, 
+                            trust_remote_code=True
+                        ).eval() 
             self.tokenizer.truncation_side = "left"
 
 
-    def score(self, question: str, responses: List[str], step_separator: str = "\n\n", 
+    def score(self, messages: Union[List[List[dict]], List[dict]], step_separator: str = "\n\n", 
               aggregation_method: Union[AggregationMethod, str] = AggregationMethod.LAST, 
               return_full_prm_result: bool = False, max_input_tokens: int = 8192) -> List[Union[PRMResult, float]]:
         """
@@ -151,25 +158,28 @@ class HuggingFaceProcessRewardModel(AbstractProcessRewardModel):
         # Convert string to enum if needed for backward compatibility
         if isinstance(aggregation_method, str):
             aggregation_method = AggregationMethod(aggregation_method)
+        if isinstance(messages[0], dict):
+            messages = [messages]
         all_scores = []
         if self.model_name == "RLHFlow/Llama3.1-8B-PRM-Deepseek-Data":
-            for ans in responses:
+            for conv_messages in messages:
                 step_scores = []
-                conversation = []
                 if aggregation_method == AggregationMethod.MODEL:
-                    ans_list = [ans]
+                    steps_list = [conv_messages[-1]['content']]
                 else:
-                    ans_list = ans.split(step_separator)
-
-                for k in range(len(ans_list)):
+                    steps_list = conv_messages[-1]['content'].split(step_separator)
+                conversation = conv_messages[:-1]
+                for k in range(len(steps_list)):
                     if k == 0:
-                        text = question + " " + ans_list[0]
+                        text = " " + steps_list[0]
                     else:
-                        text = ans_list[k]
+                        text = steps_list[k]
                     conversation.append({"content": text, "role": "user"})
                     conversation.append({"content": "+", "role": "assistant"})
                     input_ids = self.tokenizer.apply_chat_template(
-                        conversation, return_tensors="pt"
+                        conversation,
+                        return_tensors="pt",
+                        max_length=max_input_tokens
                     ).to(self.model.device)
                     with torch.no_grad():
                         logits = self.model(input_ids).logits[
@@ -187,45 +197,39 @@ class HuggingFaceProcessRewardModel(AbstractProcessRewardModel):
                 all_scores.append(step_scores)
         
         elif self.model_name == "Qwen/Qwen2.5-Math-PRM-7B":
-            formatted_convs = []
-            for ans in responses:
+            for conv_messages in messages:
                 if aggregation_method == AggregationMethod.MODEL:
-                    steps_list = [ans]    
+                    steps_list = [conv_messages[-1]['content']]    
                 else:
-                    steps_list = ans.split(step_separator)
+                    steps_list = conv_messages[-1]['content'].split(step_separator)
                 QWEN_PRM_SYSTEM_PROMPT = "Please reason step by step, and put your final answer within \\boxed{}."
-                messages = [
+                system_turn = [
                     {"role": "system", "content": QWEN_PRM_SYSTEM_PROMPT},
-                    {"role": "user", "content": question},
-                    {"role": "assistant", "content": "<extra_0>".join(steps_list) + "<extra_0>"},
                 ] # 0.88671875
-
+                conv_messages = system_turn + conv_messages[:-1] + [{"role": "assistant", "content": "<extra_0>".join(steps_list) + "<extra_0>"},]
                 # Prepare conversation for scoring
                 conversation = self.tokenizer.apply_chat_template(
-                    messages, 
+                    conv_messages, 
                     tokenize=False, 
                     add_generation_prompt=False
                 )
-                formatted_convs.append(conversation)
 
-            # TODO: tokenize each batch independently so there is less padding and more memory efficient
+                # TODO: tokenize each batch independently so there is less padding and more memory efficient
 
-            all_input_ids = self.tokenizer.encode(
-                formatted_convs,
-                return_tensors="pt", 
-                truncation=True,
-                padding=True,
-                max_length=max_input_tokens
-            ).to(self.model.device)
-            step_sep_id = self.tokenizer.encode("<extra_0>")[0]
-            token_masks = (all_input_ids == step_sep_id)
-            all_outputs = self.model(input_ids=all_input_ids)
-            breakpoint()
-            all_scores = make_step_rewards(all_outputs[0], token_masks)
-
+                all_input_ids = self.tokenizer.encode(
+                    conversation,
+                    return_tensors="pt", 
+                    truncation=True,
+                    padding=True,
+                    max_length=max_input_tokens
+                ).to(self.model.device)
+                step_sep_id = self.tokenizer.encode("<extra_0>")[0]
+                token_masks = (all_input_ids == step_sep_id)
+                all_outputs = self.model(input_ids=all_input_ids)
+                all_scores.append(make_step_rewards(all_outputs[0], token_masks)[0])
         else:
             raise ValueError(f"Model {self.model_name} is not supported")
-        
+
         if return_full_prm_result:
             return [PRMResult(scores=scores, aggregation_method=aggregation_method) for scores in all_scores]
         else:
@@ -248,8 +252,9 @@ if __name__ == "__main__":
 
     Therefore, 8"""
 
-    model = HuggingFaceProcessRewardModel("Qwen/Qwen2.5-Math-PRM-7B", device=0)
-    out = model.score("What is 2+2?",
-                 [output1, output2])
+    model = HuggingFaceProcessRewardModel("RLHFlow/Llama3.1-8B-PRM-Deepseek-Data", device=0)
+    out = model.score([
+        [{"role": "user", "content": "What is 2+2?"}, {"role": "assistant", "content": output1}],
+        [{"role": "user", "content": "What is 2+2?"}, {"role": "assistant", "content": output2}],
+    ])
     print(out)
-    breakpoint()

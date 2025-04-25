@@ -25,14 +25,14 @@ import os
 from vllm import LLM
 
 
-class VLLMOutcomeRM(AbstractOutcomeRewardModel):
+class VllmOutcomeRewardModel(AbstractOutcomeRewardModel):
     def __init__(self, model_name: str, device: Union[str, int], **kwargs):
         raise NotImplementedError("VLLMOutcomeRM is not implemented")
     
-    def score(self, question: str, responses: List[str], batch_size: int = 4, max_input_tokens: int = 8192) -> List[float]:
+    def score(self, messages: Union[List[List[dict]], List[dict]], max_input_tokens: int = 8192) -> List[float]:
         raise NotImplementedError("VLLMOutcomeRM is not implemented")
 
-class VLLMProcessRM(AbstractProcessRewardModel):
+class VllmProcessRewardModel(AbstractProcessRewardModel):
     def __init__(self, model_name: str, device: Union[str, int], **kwargs):
         os.environ["VLLM_ALLOW_LONG_MAX_MODEL_LEN"] = "1"
         num_gpus = torch.cuda.device_count()
@@ -50,30 +50,42 @@ class VLLMProcessRM(AbstractProcessRewardModel):
             self.tokenizer.truncation_side = "left"
         self.model_name = model_name
 
-    def score(self, question: str, responses: List[str], step_separator: str = "\n\n", 
-              aggregation_method: Union[AggregationMethod, str] = AggregationMethod.LAST, 
-              return_full_prm_result: bool = False, max_input_tokens: int = 8192) -> Union[List[PRMResult], List[float]]:
+    def score(self, messages: Union[List[List[dict]], List[dict]], max_input_tokens: int = 8192, step_sep: str = "\n\n",
+             aggregation_method: Union[AggregationMethod, str] = AggregationMethod.LAST, return_full_prm_result: bool = False) -> Union[List[PRMResult], List[float]]:
+        """
+        Score last turn assistant message using the OpenAI chat completion format.
         
-        # Convert string to enum if needed for backward compatibility
+        Args:
+            messages: List of conversations in OpenAI chat completion format
+            max_input_tokens: Maximum number of input tokens
+            return_full_prm_result: Whether to return full PRM results
+        """
         if isinstance(aggregation_method, str):
             aggregation_method = AggregationMethod(aggregation_method)
+        if isinstance(messages[0], dict):
+            # ensure the input is a list of list of dicts   
+            messages = [messages]
+            
         if self.model_name == "Qwen/Qwen2.5-Math-PRM-7B":
             formatted_convs = []
-            for ans in responses:
-                if aggregation_method == AggregationMethod.MODEL:
-                    steps_list = [ans]    
-                else:
-                    steps_list = ans.split(step_separator)
-                QWEN_PRM_SYSTEM_PROMPT = "Please reason step by step, and put your final answer within \\boxed{}."
-                messages = [
-                    {"role": "system", "content": QWEN_PRM_SYSTEM_PROMPT},
-                    {"role": "user", "content": question},
-                    {"role": "assistant", "content": "<extra_0>".join(steps_list) + "<extra_0>"},
-                ]
+            QWEN_PRM_SYSTEM_PROMPT = "Please reason step by step, and put your final answer within \\boxed{}."
+            system_turn = [{
+                "role": "system",
+                "content": QWEN_PRM_SYSTEM_PROMPT
+            }]
+            for conv_messages in messages:
 
-                # Prepare conversation for scoring
+                last_assistant_message = conv_messages[-1]['content']
+                if aggregation_method == AggregationMethod.MODEL:
+                    steps_list = [last_assistant_message]
+                else:
+                    steps_list = last_assistant_message.split(step_sep)
+                formatted_last_assistant_turn = [
+                    {"role": "assistant", "content": "<extra_0>".join(steps_list) + "<extra_0>"}
+                ]
+                prepared_messages = system_turn + conv_messages[:-1] + formatted_last_assistant_turn
                 conversation = self.tokenizer.apply_chat_template(
-                    messages, 
+                    prepared_messages,
                     tokenize=False, 
                     add_generation_prompt=False
                 )
@@ -102,7 +114,6 @@ class VLLMProcessRM(AbstractProcessRewardModel):
 if __name__ == "__main__":
     output = """To determine how much Janet makes from selling the duck eggs at the farmers' market, we need to follow these steps:\n\n1. Calculate the total number of eggs laid by the ducks each day.\n2. Determine how many eggs Janet eats and bakes for herself each day.\n3. Find out how many eggs are left to be sold.\n4. Calculate the revenue from selling the remaining eggs at $2 per egg.\n\nLet's start with the first step:\n\n1. Janet's ducks lay 16 eggs per day.\n\nNext, we calculate how many eggs Janet eats and bakes for herself each day:\n\n2. Janet eats 3 eggs for breakfast every morning.\n3. Janet bakes 4 eggs for her friends every day.\n\nSo, the total number of eggs Janet eats and bakes for herself each day is:\n\\[ 3 + 4 = 7 \\text{ eggs} \\]\n\nNow, we find out how many eggs are left to be sold:\n\\[ 16 - 7 = 9 \\text{ eggs} \\]\n\nFinally, we calculate the revenue from selling the remaining eggs at $2 per egg:\n\\[ 9 \\times 2 = 18 \\text{ dollars} \\]\n\nTherefore, Janet makes boxed18 dollars every day at the farmers' market.
     """
-    model = VLLMOutcomeRM("Qwen/Qwen2.5-Math-RM-72B")
-    out = model.score("Janet's ducks lay 16 eggs per day. She eats three for breakfast every morning and bakes muffins for her friends every day with four. She sells the remainder at the farmers' market daily for $2 per fresh duck egg. How much in dollars does she make every day at the farmers' market?",
-                 [output])
+    model = VllmOutcomeRewardModel("Qwen/Qwen2.5-Math-RM-72B")
+    out = model.score([[{"role": "user", "content": "Janet's ducks lay 16 eggs per day. She eats three for breakfast every morning and bakes muffins for her friends every day with four. She sells the remainder at the farmers' market daily for $2 per fresh duck egg. How much in dollars does she make every day at the farmers' market?"}], [{"role": "user", "content": output}]])
     breakpoint()
