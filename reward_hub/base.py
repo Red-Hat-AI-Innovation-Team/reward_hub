@@ -22,7 +22,7 @@ from enum import Enum
 class AggregationMethod(Enum):
     MODEL = "model"
     PRODUCT = "prod"
-    MINIMUM = "min"
+    MIN = "min"
     LAST = "last"
 
 class PRMResult:
@@ -44,7 +44,7 @@ class PRMResult:
             self.score = self.product
         elif aggregation_method == AggregationMethod.LAST:
             self.score = self.last
-        elif aggregation_method == AggregationMethod.MINIMUM:
+        elif aggregation_method == AggregationMethod.MIN:
             self.score = self.min
         else:
             # model aggregate method; it only has one step
@@ -56,8 +56,12 @@ class AbstractOutcomeRewardModel(ABC):
     """abstract base class for outcome reward models"""
 
     @abstractmethod
-    def score(self, question: str, responses: List[str], max_input_tokens: int = 8196) -> List[float]:
-        """the reward for the given response"""
+    def score(self, messages: Union[List[List[dict]], List[dict]], max_input_tokens: int = 8196) -> List[float]:
+        """
+        Score responses using the OpenAI chat completion format.
+        If messages is a list of list of dicts, then each list of dicts is a conversation.
+        If messages is a list of dicts, then it is a single conversation.
+        """
         pass
 
 class AbstractProcessRewardModel(ABC):
