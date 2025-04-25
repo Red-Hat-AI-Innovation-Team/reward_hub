@@ -1,12 +1,7 @@
-import torch
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    AutoModel
-)
+from transformers import AutoTokenizer
+
 from typing import Union, List
-from reward_hub.base import AbstractOutcomeRewardModel, AbstractProcessRewardModel, PRMResult
-from openai import OpenAI
+from reward_hub.base import AbstractOutcomeRewardModel, AbstractProcessRewardModel
 from reward_hub.openai.vllm_client import vllmClient
 from reward_hub.drsow import DrSow, DrSowConfig
 

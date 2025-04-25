@@ -1,4 +1,4 @@
-from .base import AbstractAutoRewardModel, AbstractOutcomeRewardModel, AbstractProcessRewardModel
+from .base import AbstractAutoRewardModel
 from .utils import SUPPORTED_BACKENDS
 from reward_hub.hf.reward import HuggingFaceOutcomeRewardModel, HuggingFaceProcessRewardModel
 from reward_hub.vllm.reward import VllmOutcomeRewardModel, VllmProcessRewardModel
