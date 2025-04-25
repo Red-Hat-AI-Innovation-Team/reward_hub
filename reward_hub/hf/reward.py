@@ -15,16 +15,15 @@
 
 import torch
 from transformers import (
-    AutoModelForCausalLM,
     AutoTokenizer,
     AutoModel,
     AutoModelForSequenceClassification
 )
 from typing import Union, List
 from reward_hub.base import AbstractOutcomeRewardModel, AbstractProcessRewardModel, PRMResult, AggregationMethod
+import torch.nn.functional as F
 
-
-class HuggingFaceOutcomeRM(AbstractOutcomeRewardModel):
+class HuggingFaceOutcomeRewardModel(AbstractOutcomeRewardModel):
     def __init__(self, model_name: str, device: Union[str, int], **kwargs):
         self.model_name = model_name
         if model_name == "RLHFlow/ArmoRM-Llama3-8B-v0.1":
@@ -44,27 +43,30 @@ class HuggingFaceOutcomeRM(AbstractOutcomeRewardModel):
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
 
 
-    def score(self, question: str, responses: List[str], max_input_tokens: int = 8192) -> List[float]:
+    def score(self, messages: Union[List[List[dict]], List[dict]], max_input_tokens: int = 8192) -> List[float]:
+        """
+        Input messages uses the OpenAi chat completion format.
+        If messages is a list of list of dicts, then each list of dicts is a conversation.
+        If messages is a list of dicts, then it is a single conversation.
+        """
+        if isinstance(messages[0], dict):
+            # ensure the input is a list of list of dicts   
+            messages = [messages]
+
         all_scores = []
         if self.model_name == "internlm/internlm2-7b-reward":
-            for ans in responses:
-                messages = [
-                    {"role": "user", "content": question},
-                    {"role": "assistant", "content": ans},
-                ]
-                reward_score = self.model.get_score(self.tokenizer, messages)
+            for conv_messages in messages:
+                reward_score = self.model.get_score(self.tokenizer, conv_messages)
                 all_scores.append(reward_score)
 
         elif self.model_name == "Qwen/Qwen2.5-Math-RM-72B":
-            for ans in responses:
+            for conv_messages in messages:
                 QWEN_PRM_SYSTEM_PROMPT = "Please reason step by step, and put your final answer within \\boxed{}."
-                message = [
+                conv_messages = [
                     {"role": "system", "content": QWEN_PRM_SYSTEM_PROMPT},
-                    {"role": "user", "content": question},
-                    {"role": "assistant", "content": ans},
-                ]
+                ] + conv_messages
                 conversation_str = self.tokenizer.apply_chat_template(
-                    message, 
+                    conv_messages, 
                     tokenize=False, 
                     add_generation_prompt=False
                 )
@@ -81,13 +83,9 @@ class HuggingFaceOutcomeRM(AbstractOutcomeRewardModel):
                 all_scores.append(reward_score)
 
         elif self.model_name == "RLHFlow/ArmoRM-Llama3-8B-v0.1":
-            for ans in responses:
-                messages = [
-                    {"role": "user", "content": question},
-                    {"role": "assistant", "content": ans},
-                ]
+            for conv_messages in messages:
                 input_ids = self.tokenizer.apply_chat_template(
-                    messages,
+                    conv_messages,
                     return_tensors="pt",
                     padding=True,
                     truncation=True,
@@ -105,10 +103,27 @@ class HuggingFaceOutcomeRM(AbstractOutcomeRewardModel):
         return all_scores
 
 
-class HuggingFaceProcessRM(AbstractProcessRewardModel):
+
+
+
+
+def make_step_rewards(logits, token_masks):
+    probabilities = F.softmax(logits, dim=-1)
+    probabilities = probabilities * token_masks.unsqueeze(-1) # bs, seq_len, num_labels
+    
+    all_scores_res = []
+    for i in range(probabilities.size(0)):
+        sample = probabilities[i] # seq_len, num_labels
+        positive_probs = sample[sample != 0].view(-1, 2)[:, 1] # valid_tokens, num_labels
+        non_zero_elements_list = positive_probs.cpu().tolist()
+        all_scores_res.append(non_zero_elements_list)
+    return all_scores_res
+
+
+class HuggingFaceProcessRewardModel(AbstractProcessRewardModel):
     def __init__(self, model_name: str, device: Union[str, int], **kwargs):
         self.model_name = model_name
-        self.model = AutoModelForCausalLM.from_pretrained(
+        self.model = AutoModel.from_pretrained(
                         model_name,
                         torch_dtype=torch.bfloat16,
                         device_map=device, 
@@ -195,16 +210,18 @@ class HuggingFaceProcessRM(AbstractProcessRewardModel):
 
             # TODO: tokenize each batch independently so there is less padding and more memory efficient
 
-            all_input_ids = self.tokenizer(
+            all_input_ids = self.tokenizer.encode(
                 formatted_convs,
                 return_tensors="pt", 
                 truncation=True,
                 padding=True,
                 max_length=max_input_tokens
-            ).input_ids
-            all_decoded = self.tokenizer.batch_decode(all_input_ids, skip_special_tokens=False)
-            all_outputs = self.model.encode(all_decoded)
-            all_scores = [[d[-1].item() for d in ex.outputs.data] for ex in all_outputs]
+            ).to(self.model.device)
+            step_sep_id = self.tokenizer.encode("<extra_0>")[0]
+            token_masks = (all_input_ids == step_sep_id)
+            all_outputs = self.model(input_ids=all_input_ids)
+            breakpoint()
+            all_scores = make_step_rewards(all_outputs[0], token_masks)
 
         else:
             raise ValueError(f"Model {self.model_name} is not supported")
@@ -231,7 +248,7 @@ if __name__ == "__main__":
 
     Therefore, 8"""
 
-    model = HuggingFaceOutcomeRM("RLHFlow/ArmoRM-Llama3-8B-v0.1", device=0)
+    model = HuggingFaceProcessRewardModel("Qwen/Qwen2.5-Math-PRM-7B", device=0)
     out = model.score("What is 2+2?",
                  [output1, output2])
     print(out)
