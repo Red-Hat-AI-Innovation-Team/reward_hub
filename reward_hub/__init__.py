@@ -14,7 +14,7 @@ load_method_to_class = {
 
 
 class AutoRM(AbstractAutoRewardModel):
-    def load(self, model_name: str, load_method: str, **kwargs):
+    def load(model_name: str, load_method: str, **kwargs):
         """
         load_methods support the following choices:
             - "vllm": load from python vllm backend
@@ -45,4 +45,4 @@ class AutoRM(AbstractAutoRewardModel):
         assert len(valid_classes) == 1, f"Model {model_name} method should give one-on-one mapping {load_method}"
         
         # Initialize the first valid reward model class with kwargs
-        return list(valid_classes)[0](model_name, **kwargs)
+        return list(valid_classes)[0](model_name=model_name, **kwargs)
