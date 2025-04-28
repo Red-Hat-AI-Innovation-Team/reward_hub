@@ -103,11 +103,14 @@ RewardHub supports multiple serving backends:
 ### Supported Models
 
 We support various reward models including:
-- Qwen Math PRM
-- InternLM2 Reward
-- ArmoRM
-- DrSow
-- And more...
+
+| Model | Type | HuggingFace | VLLM | OpenAI |
+|-------|------|-------------|------|---------|
+| Qwen/Qwen2.5-Math-PRM-7B | PRM | ✓ | ✓ | ✗ |
+| internlm/internlm2-7b-reward | ORM | ✓ | ✗ | ✗ |
+| RLHFlow/Llama3.1-8B-PRM-Deepseek-Data | PRM | ✓ | ✗ | ✗ |
+| RLHFlow/ArmoRM-Llama3-8B-v0.1 | ORM | ✓ | ✗ | ✗ |
+| drsow | ORM | ✗ | ✗ | ✓ |
 
 ## Research
 
