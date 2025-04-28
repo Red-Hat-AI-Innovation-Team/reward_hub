@@ -106,11 +106,11 @@ We support various reward models including:
 
 | Model | Type | HuggingFace | VLLM | OpenAI |
 |-------|------|-------------|------|---------|
-| Qwen/Qwen2.5-Math-PRM-7B | PRM | ✓ | ✓ | ✗ |
-| internlm/internlm2-7b-reward | ORM | ✓ | ✗ | ✗ |
-| RLHFlow/Llama3.1-8B-PRM-Deepseek-Data | PRM | ✓ | ✗ | ✗ |
-| RLHFlow/ArmoRM-Llama3-8B-v0.1 | ORM | ✓ | ✗ | ✗ |
-| drsow | ORM | ✗ | ✗ | ✓ |
+| `Qwen/Qwen2.5-Math-PRM-7B` | PRM | ✓ | ✓ | ✗ |
+| `internlm/internlm2-7b-reward` | ORM | ✓ | ✗ | ✗ |
+| `RLHFlow/Llama3.1-8B-PRM-Deepseek-Data` | PRM | ✓ | ✗ | ✗ |
+| `RLHFlow/ArmoRM-Llama3-8B-v0.1` | ORM | ✓ | ✗ | ✗ |
+| `drsow` | ORM | ✗ | ✗ | ✓ |
 
 ## Research
 
