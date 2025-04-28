@@ -1,10 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+
 [build-system]
 requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "reward_hub"
-version = "0.1.0"
 description = "A unified hub for reward models in AI alignment"
 readme = "README.md"
 authors = [
@@ -23,6 +24,7 @@ classifiers = [
     "Operating System :: POSIX :: Linux",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
+dynamic = ["version"]
 requires-python = ">=3.9"
 dependencies = [
     "vllm>=0.7.3",
@@ -33,6 +35,11 @@ dependencies = [
     "datasets>=2.18.0,<4.0.0",
     "accelerate>=1.0.0",
 ]
+
+[tool.setuptools_scm]
+version_file = "reward_hub/_version.py"
+# do not include +gREV local version, required for Test PyPI upload
+local_scheme = "no-local-version"
 
 [project.optional-dependencies]
 dev = [
