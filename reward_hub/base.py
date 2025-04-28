@@ -37,14 +37,7 @@ class PRMResult:
 
         # Handle both string and enum inputs for backward compatibility
         if isinstance(aggregation_method, str):
-            
-            try:
-                # Try to convert string to enum
-                aggregation_method = AggregationMethod(aggregation_method)
-            except StopIteration:
-                valid_methods = [method.value for method in AggregationMethod]
-                raise ValueError(f"Invalid aggregate method: '{aggregation_method}'. "
-                                f"Valid methods are: {valid_methods}")
+            aggregation_method = AggregationMethod(aggregation_method)
         
         # Now aggregation_method is guaranteed to be an enum
         if aggregation_method == AggregationMethod.PRODUCT:

@@ -56,12 +56,7 @@ class VLLMProcessRM(AbstractProcessRewardModel):
         
         # Convert string to enum if needed for backward compatibility
         if isinstance(aggregation_method, str):
-            try:
-                aggregation_method = AggregationMethod(aggregation_method)
-            except StopIteration:
-                valid_methods = [method.value for method in AggregationMethod]
-                raise ValueError(f"Invalid aggregate method: '{aggregation_method}'. Valid methods: {valid_methods}")
-        
+            aggregation_method = AggregationMethod(aggregation_method)
         if self.model_name == "Qwen/Qwen2.5-Math-PRM-7B":
             formatted_convs = []
             for ans in responses:
