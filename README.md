@@ -71,8 +71,7 @@ Then, you can launch client reward servers to acces the DrSow reward model.
 
 ```python
 from reward_hub import AutoRM
-from reward_hub.openai import DrSowConfig
-
+from reward_hub.drsow import DrSowConfig
 
 drsow_config = DrSowConfig(
     strong_model_name="Qwen/Qwen2.5-32B-instruct",

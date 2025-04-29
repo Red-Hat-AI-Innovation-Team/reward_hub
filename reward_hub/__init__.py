@@ -3,7 +3,7 @@ from .utils import SUPPORTED_BACKENDS
 from reward_hub.hf.reward import HuggingFaceOutcomeRewardModel, HuggingFaceProcessRewardModel
 from reward_hub.vllm.reward import VllmOutcomeRewardModel, VllmProcessRewardModel
 from reward_hub.openai.reward import OpenAIOutcomeRewardModel, OpenAIProcessRewardModel
-
+import os
 
 
 load_method_to_class = {
@@ -12,6 +12,8 @@ load_method_to_class = {
     "openai": [OpenAIOutcomeRewardModel, OpenAIProcessRewardModel]
 }
 
+
+os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
 class AutoRM(AbstractAutoRewardModel):
     def load(model_name: str, load_method: str, **kwargs):
