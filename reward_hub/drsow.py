@@ -17,7 +17,7 @@ class DrSow:
         self.tokenizer = tokenizer
         self.weak_tokenizer = weak_tokenizer
 
-    def get_batch_logprobs(self, batch, num_workers=40, mask_logprob_special_tokens=True):
+    def get_batch_logprobs(self, batch, num_workers=40, mask_logprob_special_tokens=False):
         """_summary_
 
         Args:
@@ -74,7 +74,11 @@ class DrSow:
         strong_tokens, weak_tokens = results['strong_model']["tokens"], results['weak_model']["tokens"]
 
         strong_logprobs, weak_logprobs = results['strong_model']["tokens_logprobs"], results['weak_model']["tokens_logprobs"]
-        special_tokens = set(self.tokenizer.all_special_tokens + ['', '\n'])
+
+        if mask_logprob_special_tokens:
+            special_tokens = set(['']) # HARDCODED: bc vllm turns special tokens into empty strings
+        else:
+            special_tokens = set()
 
         final_reward_dicts = []
 
