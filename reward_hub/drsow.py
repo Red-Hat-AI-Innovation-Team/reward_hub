@@ -104,7 +104,7 @@ class DrSow:
             # add single instances into the batch
             final_reward_dicts.append({
                 "drsow_reward": drsow_reward,
-                "avg_drsow_reward": drsow_reward / float(len(strong_generated_tokens)),
+                "avg_drsow_reward": drsow_reward / max(1, float(len(strong_generated_tokens))), # avoid divide by zero
                 "strong_generated_tokens": strong_generated_tokens,
                 "strong_logprobs": strong_token_logprobs,
                 "weak_generated_tokens": weak_generated_tokens,
