@@ -23,9 +23,19 @@ class vllmClient:
         add_generation_prompt: bool = True,
     ):
         """Sampling parameters for text generation.
-        Only batch_prompts is required to run it.
-        logprobs = 0, do not return log probs in the result;
-        echo = False, do not return log probs for inputs 
+        Args:
+            batch_messages: List of message lists in OpenAI chat format
+            max_completion_tokens: Maximum number of tokens to generate
+            temperature: Sampling temperature (higher = more random)
+            top_k: Number of highest probability tokens to consider for sampling
+            top_p: Cumulative probability threshold for token sampling
+            stop: List of strings that stop generation when encountered
+            num_workers: Number of parallel workers for processing requests
+            prompt_logprobs: Number of logprobs to return for prompt tokens (0 to disable)
+            add_generation_prompt: Whether to add generation prompt to the end of messages
+        
+        Returns:
+            List of response objects from the vLLM server
         """
         port = self.port
         model_name = self.model_name
@@ -75,7 +85,6 @@ class vllmClient:
                 "top_p": top_p,
                 "top_k": top_k,
                 "prompt_logprobs": prompt_logprobs,
-                "echo": False, # hardcode to false; old feature from completions. 
                 "add_generation_prompt": add_generation_prompt,
             }
             return request_body
