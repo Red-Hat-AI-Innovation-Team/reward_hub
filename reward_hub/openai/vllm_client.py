@@ -190,24 +190,3 @@ class vllmClient:
         
         return [x["prompt_logprobs"] for x in raw_outputs], [x["prompt_tokens"] for x in raw_outputs], [x["prompt_token_ids"] for x in raw_outputs]
 
-
-if __name__ == "__main__":
-    client = vllmClient("microsoft/phi-4", 8000)
-    out = client.request_logprobs([
-        [
-            {
-                "role": "system",
-                "content": "You are a helpful assistant."
-            },
-            {
-                "role": "user",
-                "content": "Hello!"
-            },
-            {
-                "role": "assistant",
-                "content": "How are you?"
-            }
-        ]
-    ], add_generation_prompt=True, num_workers=40)
-
-    print(out)

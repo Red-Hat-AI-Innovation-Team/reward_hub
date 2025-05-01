@@ -95,32 +95,3 @@ class OpenAIProcessRewardModel(AbstractProcessRewardModel):
     def __init__(self, model_name: str, **kwargs):
         raise NotImplementedError("OpenAI_ProcessRM is not implemented")
 
-
-
-if __name__ == "__main__":
-    drsow_config = DrSowConfig(
-        strong_model_name="Qwen/Qwen2.5-32B-instruct",
-        strong_port=8305,
-        weak_model_name="Qwen/Qwen2.5-32B",
-        weak_port=8306
-        )
-
-    reward_model = OpenAIOutcomeRewardModel(model_name="drsow", drsow_config=drsow_config)
-    raw_results = reward_model.score(
-        messages=[
-            [
-                # {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": "Who is Michael Jordan?"},
-                {"role": "assistant", "content": "Michael Jordan is the greatest basketball player of all time"}
-            ],
-            [
-                # {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": "Who is Michael Jordan?"},
-                {"role": "assistant", "content": "Michael Jordan is a good friend of mine who is from Ohio."}
-            ]
-        ],
-        return_raw_scores=True,
-        mask_logprob_special_tokens=False
-    )
-    print(raw_results)
-    breakpoint()
