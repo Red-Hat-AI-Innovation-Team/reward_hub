@@ -36,33 +36,34 @@ class DrSow:
                 77
             ]
         """
-        chosen_batch, prompt_batch = [ex["formatted_conv"] for ex in batch], [ex["prompt"] for ex in batch]
+        chosen_messages, chosen_batch, prompt_batch = [ex["messages"] for ex in batch], [ex["formatted_conv"] for ex in batch], [ex["prompt"] for ex in batch]
 
         tokenized_prompt_batch = [self.tokenizer.encode(ex) for ex in prompt_batch]
         weak_tokenize_prompt_batch = [self.weak_tokenizer.encode(ex) for ex in prompt_batch]
 
         # for each item in the tokenized batch; find the index of last non-pad token
         strong_init_indices = [
-            len(ex) for ex in tokenized_prompt_batch
+            len(ex) - 1 for ex in tokenized_prompt_batch  # -1 to ensure correct matching
         ]
 
         weak_init_indices = [
-            len(ex) for ex in weak_tokenize_prompt_batch
+            len(ex) - 1 for ex in weak_tokenize_prompt_batch # -1 to ensure correct matching
         ]
 
         def fetch_logprobs(batch, vllm_client, result_dict, key):
-            tokens, tokens_logprobs = vllm_client.vllm_request_logprobs(batch, num_workers=num_workers)
+            tokens_logprobs, tokens, token_ids = vllm_client.request_logprobs(batch, add_generation_prompt=False, num_workers=num_workers)
             result_dict[key] = {
                 "tokens": tokens,
-                "tokens_logprobs": tokens_logprobs
+                "tokens_logprobs": tokens_logprobs,
+                "token_ids": token_ids
             }
 
         manager = Manager()
         results = manager.dict()
 
         processes = [
-            Process(target=fetch_logprobs, args=(chosen_batch, self.strong_client, results, 'strong_model')),
-            Process(target=fetch_logprobs, args=(chosen_batch, self.weak_client, results, 'weak_model')),
+            Process(target=fetch_logprobs, args=(chosen_messages, self.strong_client, results, 'strong_model')),
+            Process(target=fetch_logprobs, args=(chosen_messages, self.weak_client, results, 'weak_model')),
         ]
 
         for process in processes:
@@ -76,9 +77,9 @@ class DrSow:
         strong_logprobs, weak_logprobs = results['strong_model']["tokens_logprobs"], results['weak_model']["tokens_logprobs"]
 
         if mask_logprob_special_tokens:
-            special_tokens = set(['']) # HARDCODED: bc vllm turns special tokens into empty strings
+            special_tokens = set(self.tokenizer.all_special_tokens)
         else:
-            special_tokens = set()
+            special_tokens = set([self.tokenizer.pad_token])
 
         final_reward_dicts = []
 
