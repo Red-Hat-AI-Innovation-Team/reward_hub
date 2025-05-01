@@ -77,9 +77,9 @@ class DrSow:
         strong_logprobs, weak_logprobs = results['strong_model']["tokens_logprobs"], results['weak_model']["tokens_logprobs"]
 
         if mask_logprob_special_tokens:
-            special_tokens = set(self.tokenizer.all_special_tokens + ["Ċ"])
+            special_tokens = set(self.tokenizer.all_special_tokens)
         else:
-            special_tokens = set(["Ċ"])
+            special_tokens = set([self.tokenizer.pad_token])
 
         final_reward_dicts = []
 
