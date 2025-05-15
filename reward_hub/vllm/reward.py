@@ -32,7 +32,7 @@ class VllmProcessRewardModel(AbstractProcessRewardModel):
         self.model_name = model_name
 
     def score(self, messages: Union[List[List[dict]], List[dict]], max_input_tokens: int = 8192, step_sep: str = "\n\n",
-             aggregation_method: Union[AggregationMethod, str] = AggregationMethod.LAST, return_full_prm_result: bool = False) -> Union[List[PRMResult], List[float]]:
+             aggregation_method: Union[AggregationMethod, str] = AggregationMethod.LAST, return_full_prm_result: bool = False, use_tqdm: bool = False) -> Union[List[PRMResult], List[float]]:
         """
         Score last turn assistant message using the OpenAI chat completion format.
         
@@ -40,13 +40,13 @@ class VllmProcessRewardModel(AbstractProcessRewardModel):
             messages: List of conversations in OpenAI chat completion format
             max_input_tokens: Maximum number of input tokens
             return_full_prm_result: Whether to return full PRM results
+            use_tqdm: Whether to display a progress bar (using tqdm)
         """
         if isinstance(aggregation_method, str):
             aggregation_method = AggregationMethod(aggregation_method)
         if isinstance(messages[0], dict):
             # ensure the input is a list of list of dicts   
             messages = [messages]
-            
         if self.model_name == "Qwen/Qwen2.5-Math-PRM-7B":
             formatted_convs = []
             QWEN_PRM_SYSTEM_PROMPT = "Please reason step by step, and put your final answer within \\boxed{}."
@@ -80,7 +80,7 @@ class VllmProcessRewardModel(AbstractProcessRewardModel):
                 max_length=max_input_tokens
             ).input_ids
             batch_decoded = self.tokenizer.batch_decode(all_input_ids, skip_special_tokens=False)
-            all_outputs = self.model.encode(batch_decoded)
+            all_outputs = self.model.encode(batch_decoded, use_tqdm=use_tqdm)
             all_scores = [[d[-1].item() for d in ex.outputs.data] for ex in all_outputs]
 
         else:
