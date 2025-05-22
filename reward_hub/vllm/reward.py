@@ -23,6 +23,7 @@ class VllmProcessRewardModel(AbstractProcessRewardModel):
                     task="reward",
                     device=device,
                     gpu_memory_utilization=0.8,
+                    enable_prefix_caching=True,
                     tensor_parallel_size=1,
                     )
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
