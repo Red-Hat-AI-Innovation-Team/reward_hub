@@ -175,7 +175,7 @@ class vllmClient:
     def get_logprobs_and_tokens(self, prompt_logprobs_ob):
         tokens, token_ids, token_logprobs = [], [], []
         for ex in prompt_logprobs_ob:
-            if ex == None:
+            if ex is None:
                 continue
             prompt_token_ob = list(ex.items())[0]
             token_ids.append(prompt_token_ob[0])
@@ -190,3 +190,80 @@ class vllmClient:
         
         return [x["prompt_logprobs"] for x in raw_outputs], [x["prompt_tokens"] for x in raw_outputs], [x["prompt_token_ids"] for x in raw_outputs]
 
+
+class HTTPClient:
+    def __init__(self, host: str, port: int, model_name: str):
+        """Initialize the HTTP client for API communication.
+        
+        Parameters
+        ----------
+        host : str
+            Hostname of the service (e.g., "0.0.0.0" or "localhost")
+        port : int
+            Port number the service is running on
+        model_name : str
+            Name of the model to use
+        """
+        self.base_url = f"http://{host.strip('/')}:{port}/"
+        self.model_name = model_name
+    
+    def post_request(self, messages: List[Dict]) -> Dict[str, Any]:
+        """Make POST request to API endpoint for a single message.
+        
+        Parameters
+        ----------
+        endpoint : str
+            API endpoint name
+        messages : List[Dict]
+            Single message list to send to the API
+            
+        Returns
+        -------
+        Dict[str, Any]
+            JSON response from the API
+        """
+        from urllib.parse import urljoin
+        
+        api_url = urljoin(self.base_url, "pooling")
+        headers = {"Content-Type": "application/json"}
+        
+        payload = {"model": self.model_name, "messages": messages}
+        response = requests.post(api_url, headers=headers, json=payload)
+        return response.json()
+
+    def post_reward_requests(self, batch_messages: List[List[Dict]], num_workers: int = 40) -> List[Dict[str, Any]]:
+        """Make concurrent POST requests to API endpoint for batch messages.
+        
+        Parameters
+        ----------
+        endpoint : str
+            API endpoint name
+        batch_messages : List[List[Dict]]
+            List of message lists to send to the API
+        num_workers : int, optional
+            Maximum number of concurrent requests, by default 40
+            
+        Returns
+        -------
+        List[Dict[str, Any]]
+            List of JSON responses from the API in the same order as input
+        """
+        import concurrent.futures
+        
+        # Limit workers to the number of messages
+        actual_workers = min(num_workers, len(batch_messages))
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=actual_workers) as executor:
+            # Submit all requests
+            future_to_index = {
+                executor.submit(self.post_request, messages): i 
+                for i, messages in enumerate(batch_messages)
+            }
+            
+            # Collect results in original order
+            results = [None] * len(batch_messages)
+            for future in concurrent.futures.as_completed(future_to_index):
+                index = future_to_index[future]
+                results[index] = future.result()
+        
+        return results

@@ -36,7 +36,7 @@ class DrSow:
                 77
             ]
         """
-        chosen_messages, chosen_batch, prompt_batch = [ex["messages"] for ex in batch], [ex["formatted_conv"] for ex in batch], [ex["prompt"] for ex in batch]
+        chosen_messages, _, prompt_batch = [ex["messages"] for ex in batch], [ex["formatted_conv"] for ex in batch], [ex["prompt"] for ex in batch]
 
         tokenized_prompt_batch = [self.tokenizer.encode(ex) for ex in prompt_batch]
         weak_tokenize_prompt_batch = [self.weak_tokenizer.encode(ex) for ex in prompt_batch]
