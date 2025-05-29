@@ -101,26 +101,7 @@ class OpenAIProcessRewardModel(AbstractProcessRewardModel):
 
         if model_name == "Qwen/Qwen2.5-Math-PRM-7B":
             self.tokenizer.truncation_side = "left"
-    def _extract_rewards(self, response) -> List[float]:
-        """Extract reward scores from API response.
 
-        Parameters
-        ----------
-        response : requests.Response
-            Response from the API
-
-        Returns
-        -------
-        List[float]
-            List of reward scores
-        """
-        try:
-            response_data = response
-            rewards = [x[1] for x in response_data["data"][0]["data"]]
-            return rewards
-        except (KeyError, IndexError) as e:
-            raise ValueError(f"Error parsing response: {e}")
-        
     def score(self, messages: Union[List[List[dict]], List[dict]], step_sep: str = "\n\n",
              aggregation_method: Union[AggregationMethod, str] = AggregationMethod.LAST, return_full_prm_result: bool = False, num_workers: int = 9999) -> Union[List[PRMResult], List[float]]:
         """
@@ -139,7 +120,7 @@ class OpenAIProcessRewardModel(AbstractProcessRewardModel):
         if isinstance(messages[0], dict):
             # ensure the input is a list of list of dicts   
             messages = [messages]
-        
+
         if self.model_name == "Qwen/Qwen2.5-Math-PRM-7B":
             formatted_messages = []
             QWEN_PRM_SYSTEM_PROMPT = "Please reason step by step, and put your final answer within \\boxed{}."
