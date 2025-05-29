@@ -139,7 +139,7 @@ class OpenAIProcessRewardModel(AbstractProcessRewardModel):
         if isinstance(messages[0], dict):
             # ensure the input is a list of list of dicts   
             messages = [messages]
-            
+        
         if self.model_name == "Qwen/Qwen2.5-Math-PRM-7B":
             formatted_messages = []
             QWEN_PRM_SYSTEM_PROMPT = "Please reason step by step, and put your final answer within \\boxed{}."

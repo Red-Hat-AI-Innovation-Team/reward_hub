@@ -1,6 +1,4 @@
 # Test the OpenAI PRM
-
-import pytest
 from reward_hub.openai.reward import OpenAIProcessRewardModel
 from reward_hub.vllm.reward import AggregationMethod, PRMResult
 

@@ -175,7 +175,7 @@ class vllmClient:
     def get_logprobs_and_tokens(self, prompt_logprobs_ob):
         tokens, token_ids, token_logprobs = [], [], []
         for ex in prompt_logprobs_ob:
-            if ex == None:
+            if ex is None:
                 continue
             prompt_token_ob = list(ex.items())[0]
             token_ids.append(prompt_token_ob[0])
