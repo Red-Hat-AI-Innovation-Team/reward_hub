@@ -2,9 +2,9 @@ from transformers import AutoTokenizer
 
 from typing import Union, List
 from reward_hub.base import AbstractOutcomeRewardModel, AbstractProcessRewardModel
-from reward_hub.openai.vllm_client import vllmClient
+from reward_hub.openai.vllm_client import vllmClient, HTTPClient
 from reward_hub.drsow import DrSow, DrSowConfig
-
+from reward_hub.vllm.reward import AggregationMethod, PRMResult
 
 
 class OpenAIOutcomeRewardModel(AbstractOutcomeRewardModel):
@@ -92,6 +92,85 @@ class OpenAIOutcomeRewardModel(AbstractOutcomeRewardModel):
             raise NotImplementedError("OpenAI_OutcomeRM is not implemented")
 
 class OpenAIProcessRewardModel(AbstractProcessRewardModel):
-    def __init__(self, model_name: str, **kwargs):
-        raise NotImplementedError("OpenAI_ProcessRM is not implemented")
+    def __init__(self, model_name: str, port: int):
+        self.model_name = model_name
+        self.port = port
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        # assuming localhost
+        self.model = HTTPClient(model_name=model_name, host="0.0.0.0", port=port)
+
+        if model_name == "Qwen/Qwen2.5-Math-PRM-7B":
+            self.tokenizer.truncation_side = "left"
+    def _extract_rewards(self, response) -> List[float]:
+        """Extract reward scores from API response.
+
+        Parameters
+        ----------
+        response : requests.Response
+            Response from the API
+
+        Returns
+        -------
+        List[float]
+            List of reward scores
+        """
+        try:
+            response_data = response
+            rewards = [x[1] for x in response_data["data"][0]["data"]]
+            return rewards
+        except (KeyError, IndexError) as e:
+            raise ValueError(f"Error parsing response: {e}")
+        
+    def score(self, messages: Union[List[List[dict]], List[dict]], step_sep: str = "\n\n",
+             aggregation_method: Union[AggregationMethod, str] = AggregationMethod.LAST, return_full_prm_result: bool = False, num_workers: int = 9999) -> Union[List[PRMResult], List[float]]:
+        """
+        Score last turn assistant message using the OpenAI chat completion format.
+        
+        Args:
+            messages: List of conversations in OpenAI chat completion format
+            step_sep: Separator for splitting steps in the assistant message
+            aggregation_method: Method for aggregating step scores
+            return_full_prm_result: Whether to return full PRM results
+            num_workers: Number of workers for parallel processing
+        """
+        
+        if isinstance(aggregation_method, str):
+            aggregation_method = AggregationMethod(aggregation_method)
+        if isinstance(messages[0], dict):
+            # ensure the input is a list of list of dicts   
+            messages = [messages]
+            
+        if self.model_name == "Qwen/Qwen2.5-Math-PRM-7B":
+            formatted_messages = []
+            QWEN_PRM_SYSTEM_PROMPT = "Please reason step by step, and put your final answer within \\boxed{}."
+            system_turn = [{
+                "role": "system",
+                "content": QWEN_PRM_SYSTEM_PROMPT
+            }]
+            
+            for conv_messages in messages:
+                last_assistant_message = conv_messages[-1]['content']
+                if aggregation_method == AggregationMethod.MODEL:
+                    steps_list = [last_assistant_message]
+                else:
+                    steps_list = last_assistant_message.split(step_sep)
+                formatted_last_assistant_turn = [
+                    {"role": "assistant", "content": "<extra_0>".join(steps_list) + "<extra_0>"}
+                ]
+                prepared_messages = system_turn + conv_messages[:-1] + formatted_last_assistant_turn
+                formatted_messages.append(prepared_messages)
+
+            # Use HTTP client to get embeddings/scores from VLLM server
+            all_outputs = self.model.post_reward_requests(formatted_messages, num_workers=num_workers)
+            
+            all_scores = [[step_scores[-1] for step_scores in ex['data'][0]['data']] for ex in all_outputs]
+
+
+        else:
+            raise ValueError(f"Model {self.model_name} is not supported")
+        
+        if return_full_prm_result:
+            return [PRMResult(scores=scores) for scores in all_scores]
+        else:
+            return [PRMResult(scores=scores, aggregation_method=aggregation_method).score for scores in all_scores]
 
