@@ -32,8 +32,6 @@ dependencies = [
     "numpy>=1.24.0",
     "requests",
     "openai>=1.13.3,<2.0.0",
-    "datasets>=2.18.0,<4.0.0",
-    "accelerate>=1.0.0",
 ]
 
 [tool.setuptools_scm]
@@ -52,13 +50,9 @@ dev = [
 "Homepage" = "https://github.com/Red-Hat-AI-Innovation-Team/reward_hub/tree/main"
 "Bug Tracker" = "https://github.com/Red-Hat-AI-Innovation-Team/reward_hub/issues"
 
-[tool.setuptools]
-packages = [
-    "reward_hub",
-    "reward_hub.hf",
-    "reward_hub.vllm",
-    "reward_hub.openai"
-] 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["reward_hub*"] 
 
 [tool.distutils.bdist_wheel]
 universal = true
