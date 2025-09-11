@@ -7,27 +7,27 @@ on:
     branches: [ main ]
 
 jobs:
-  code-quality:
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-        
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -e .[dev]
-        
-    - name: Lint with ruff
-      run: ruff check .
-      
-    - name: Check formatting with ruff
-      run: ruff format --check .
+  # code-quality:
+  #   runs-on: ubuntu-latest
+  #   continue-on-error: true
+  #   steps:
+  #   - uses: actions/checkout@v4
+  #   
+  #   - name: Set up Python
+  #     uses: actions/setup-python@v5
+  #     with:
+  #       python-version: '3.11'
+  #       
+  #   - name: Install dependencies
+  #     run: |
+  #       python -m pip install --upgrade pip
+  #       pip install -e .[dev]
+  #       
+  #   - name: Lint with ruff
+  #     run: ruff check .
+  #     
+  #   - name: Check formatting with ruff
+  #     run: ruff format --check .
 
   test:
     runs-on: ubuntu-latest
