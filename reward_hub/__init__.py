@@ -3,6 +3,8 @@ from .utils import SUPPORTED_BACKENDS
 from reward_hub.hf.reward import HuggingFaceOutcomeRewardModel, HuggingFaceProcessRewardModel
 from reward_hub.vllm.reward import VllmOutcomeRewardModel, VllmProcessRewardModel
 from reward_hub.openai.reward import OpenAIOutcomeRewardModel, OpenAIProcessRewardModel
+from reward_hub.openai.judge import OpenAIJudge, JudgeType
+from typing import Union, Optional
 import os
 
 
@@ -48,3 +50,42 @@ class AutoRM(AbstractAutoRewardModel):
         
         # Initialize the first valid reward model class with kwargs
         return list(valid_classes)[0](model_name=model_name, **kwargs)
+
+
+class AutoJudge:
+    """
+    Factory class for creating judge instances.
+    """
+    
+    @staticmethod
+    def from_openai(model: str,
+                    judge_type: Union[JudgeType, str],
+                    judge_prompt: str,
+                    base_url: Optional[str] = None,
+                    api_key: Optional[str] = None,
+                    top_n: Optional[int] = None) -> OpenAIJudge:
+        """
+        Create an OpenAI-compatible judge
+        
+        Args:
+            model: Model name (e.g., "gpt-4")
+            judge_type: Type of judge - "pointwise" or "groupwise"
+            judge_prompt: Judge prompt (built-in name or custom prompt text)
+            base_url: Base URL for OpenAI-compatible API
+            api_key: API key for authentication
+            top_n: Number of top responses to select (required for groupwise)
+            
+        Returns:
+            OpenAIJudge instance
+            
+        Raises:
+            ValueError: If invalid judge_type or missing required parameters
+        """
+        return OpenAIJudge(
+            model=model,
+            judge_type=judge_type,
+            judge_prompt=judge_prompt,
+            base_url=base_url,
+            api_key=api_key,
+            top_n=top_n
+        )
