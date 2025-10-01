@@ -41,7 +41,8 @@ local_scheme = "no-local-version"
 
 [project.optional-dependencies]
 dev = [
-    "pytest",
+    "pytest>=7.0.0",
+    "pytest-mock>=3.10.0",
     "pre-commit>=3.0.4,<4.0",
     "ruff>=0.10.0"
 ]
@@ -56,3 +57,18 @@ include = ["reward_hub*"]
 
 [tool.distutils.bdist_wheel]
 universal = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests/unit"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+]
+markers = [
+    "unit: Unit tests with mocks (default, runs in CI/CD)",
+    "e2e: End-to-end tests that load actual models (manual only, excluded from CI/CD)",
+]
