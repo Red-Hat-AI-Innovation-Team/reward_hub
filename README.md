@@ -6,12 +6,21 @@
 ## Getting Started
 
 ### Installation
-Clone the repository and install the necessary dependencies:
+
+#### Basic Installation
+For all functionality including HuggingFace, VLLM, and OpenAI backends:
 
 ```bash
 git clone https://github.com/Red-Hat-AI-Innovation-Team/reward_hub.git
 cd reward_hub
 pip install -e .
+```
+
+#### Development Installation
+For development with additional tools (pytest, ruff, pre-commit):
+
+```bash
+pip install -e .[dev]
 ```
 
 ### Usage Examples
@@ -25,7 +34,7 @@ PRMs evaluate responses by analyzing the reasoning process:
 from reward_hub import AutoRM
 
 # Load a math-focused PRM using HuggingFace backend
-model = AutoRM.load("Qwen/Qwen2.5-Math-PRM-7B", load_method="hf", device=0)
+model = AutoRM.load("Qwen/Qwen2.5-Math-PRM-7B", load_method="hf")
 
 # Example conversation
 messages = [
@@ -48,7 +57,7 @@ ORMs focus on evaluating the final response quality:
 from reward_hub import AutoRM
 
 # Load an ORM using HuggingFace backend
-model = AutoRM.load("internlm/internlm2-7b-reward", load_method="hf", device=0)
+model = AutoRM.load("internlm/internlm2-7b-reward", load_method="hf")
 
 scores = model.score([
     [
@@ -105,10 +114,10 @@ We support various reward models including:
 
 | Model | Type | HuggingFace | VLLM | OpenAI |
 |-------|------|-------------|------|---------|
-| `Qwen/Qwen2.5-Math-PRM-7B` | PRM | ✓ | ✓ | ✓ |
+| `Qwen/Qwen2.5-Math-PRM-7B` | PRM | ✓ | ✓ | ✗ |
 | `internlm/internlm2-7b-reward` | ORM | ✓ | ✗ | ✗ |
 | `RLHFlow/Llama3.1-8B-PRM-Deepseek-Data` | PRM | ✓ | ✗ | ✗ |
-| `RLHFlow/ArmoRM-Llama3-8B-v0.1` | ORM | ✓ | ✗ | ✗ |
+| `RLHFlow/ArmoRM-Llama3-8B-v0.1` | ORM | ✗ | ✗ | ✗ |
 | `drsow` | ORM | ✗ | ✗ | ✓ |
 
 ## Research

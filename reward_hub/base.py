@@ -65,15 +65,12 @@ class AbstractAutoRewardModel(ABC):
     """
 
     @abstractmethod
-    def load(self, model_name: str, load_method: str, device: Union[int, str] = None):
+    def load(self, model_name: str, load_method: str):
         """load the reward model
         supported load methods:
             - "hf": load from huggingface
             - "vllm": load from vllm
             - "openai": load from openai api
-        device:
-            - 0: load the model on device 0 gpu
-            - only single gpu is supported for now
         """
         pass
 

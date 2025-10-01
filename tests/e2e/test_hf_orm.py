@@ -7,8 +7,7 @@ pytestmark = pytest.mark.e2e  # Mark all tests in this file as e2e
 class TestHuggingFaceOutcomeRM:
     def test_internlm_orm(self):
         model = HuggingFaceOutcomeRewardModel(
-            model_name="internlm/internlm2-7b-reward",
-            device=0
+            model_name="internlm/internlm2-7b-reward"
         )
         
         messages = [
