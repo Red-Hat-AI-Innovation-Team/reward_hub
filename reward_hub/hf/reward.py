@@ -10,20 +10,18 @@ from reward_hub.base import AbstractOutcomeRewardModel, AbstractProcessRewardMod
 import torch.nn.functional as F
 
 class HuggingFaceOutcomeRewardModel(AbstractOutcomeRewardModel):
-    def __init__(self, model_name: str, device: Union[str, int], **kwargs):
+    def __init__(self, model_name: str, **kwargs):
         self.model_name = model_name
         if model_name == "RLHFlow/ArmoRM-Llama3-8B-v0.1":
             self.model = AutoModelForSequenceClassification.from_pretrained(
                         model_name,
                         torch_dtype=torch.bfloat16,
-                        device_map=device, 
                         trust_remote_code=True
                     ).eval()
         else:
             self.model = AutoModel.from_pretrained(
                         model_name,
                         torch_dtype=torch.bfloat16,
-                        device_map=device, 
                         trust_remote_code=True
                     ).eval()
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
@@ -107,14 +105,13 @@ def make_step_rewards(logits, token_masks):
 
 
 class HuggingFaceProcessRewardModel(AbstractProcessRewardModel):
-    def __init__(self, model_name: str, device: Union[str, int], **kwargs):
+    def __init__(self, model_name: str, **kwargs):
         self.model_name = model_name
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
         if model_name == "RLHFlow/Llama3.1-8B-PRM-Deepseek-Data":
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_name,
                 torch_dtype=torch.bfloat16,
-                device_map=device, 
                 trust_remote_code=True
             ).eval()
             self.tokenizer.padding_side = "right"
@@ -127,7 +124,6 @@ class HuggingFaceProcessRewardModel(AbstractProcessRewardModel):
             self.model = AutoModel.from_pretrained(
                             model_name,
                             torch_dtype=torch.bfloat16,
-                            device_map=device, 
                             trust_remote_code=True
                         ).eval() 
             self.tokenizer.truncation_side = "left"
