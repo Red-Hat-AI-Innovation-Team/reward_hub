@@ -7,21 +7,20 @@ from vllm import LLM
 
 
 class VllmOutcomeRewardModel(AbstractOutcomeRewardModel):
-    def __init__(self, model_name: str, device: Union[str, int], **kwargs):
+    def __init__(self, model_name: str, **kwargs):
         raise NotImplementedError("VLLMOutcomeRM is not implemented")
     
     def score(self, messages: Union[List[List[dict]], List[dict]], max_input_tokens: int = 8192) -> List[float]:
         raise NotImplementedError("VLLMOutcomeRM is not implemented")
 
 class VllmProcessRewardModel(AbstractProcessRewardModel):
-    def __init__(self, model_name: str, device: Union[str, int], **kwargs):
+    def __init__(self, model_name: str, **kwargs):
         os.environ["VLLM_ALLOW_LONG_MAX_MODEL_LEN"] = "1"
         num_gpus = torch.cuda.device_count()
         print(f"Number of GPUs: {num_gpus}")
         
         self.model = LLM(model=model_name, 
                     task="reward",
-                    device=device,
                     gpu_memory_utilization=0.8,
                     tensor_parallel_size=1,
                     )

@@ -27,7 +27,7 @@ class AutoRM(AbstractAutoRewardModel):
             model_name: name of the model to load
             load_method: method to use for loading the model
             **kwargs: additional keyword arguments passed to the model constructor
-                     e.g. api_key for OpenAI models, device for HF models
+                     e.g. api_key for OpenAI models
         """
         if model_name not in SUPPORTED_BACKENDS:
             raise ValueError(f"Model {model_name} is not supported. Supported models: {list(SUPPORTED_BACKENDS.keys())}")

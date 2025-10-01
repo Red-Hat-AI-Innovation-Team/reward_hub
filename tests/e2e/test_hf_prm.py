@@ -1,4 +1,8 @@
+import pytest
 import unittest
+
+pytestmark = pytest.mark.e2e  # Mark all tests in this file as e2e
+
 from reward_hub import AutoRM
 from reward_hub.base import PRMResult
 
@@ -6,7 +10,7 @@ from reward_hub.base import PRMResult
 class TestHuggingFaceProcessRewardModels(unittest.TestCase):
     def test_llama3_prm(self):
         """Test the RLHFlow/Llama3.1-8B-PRM-Deepseek-Data model."""
-        model = AutoRM.load("RLHFlow/Llama3.1-8B-PRM-Deepseek-Data", "hf", device=0)
+        model = AutoRM.load("RLHFlow/Llama3.1-8B-PRM-Deepseek-Data", "hf")
         
         question = [{"role": "user", "content": "What is 2+2?"}]
         
@@ -47,7 +51,7 @@ Therefore, the answer is 5."""
     
     def test_qwen_prm(self):
         """Test the Qwen/Qwen2.5-Math-PRM-7B model."""
-        model = AutoRM.load("Qwen/Qwen2.5-Math-PRM-7B", "hf", device=0)
+        model = AutoRM.load("Qwen/Qwen2.5-Math-PRM-7B", "hf")
         
         question = [{"role": "user", "content": "Solve the equation: 3x + 5 = 14"}]
         

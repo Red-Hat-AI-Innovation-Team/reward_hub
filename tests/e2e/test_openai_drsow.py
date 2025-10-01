@@ -1,4 +1,8 @@
+import pytest
 from reward_hub.openai.reward import OpenAIOutcomeRewardModel
+
+pytestmark = pytest.mark.e2e  # Mark all tests in this file as e2e
+
 from reward_hub.drsow import DrSowConfig
 
 class TestDrSowReward:
