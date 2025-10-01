@@ -2,6 +2,8 @@
 
 import pytest
 from reward_hub.utils import SUPPORTED_BACKENDS
+
+pytestmark = pytest.mark.unit
 from reward_hub.hf.reward import HuggingFaceOutcomeRewardModel, HuggingFaceProcessRewardModel
 from reward_hub.vllm.reward import VllmProcessRewardModel
 from reward_hub.openai.reward import OpenAIOutcomeRewardModel, OpenAIProcessRewardModel

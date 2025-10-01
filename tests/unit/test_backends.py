@@ -6,6 +6,8 @@ from unittest.mock import MagicMock, patch
 from reward_hub.base import PRMResult
 from reward_hub.drsow import DrSowConfig
 
+pytestmark = pytest.mark.unit
+
 
 class TestHuggingFaceBackends:
     """Test HuggingFace ORM and PRM backends"""

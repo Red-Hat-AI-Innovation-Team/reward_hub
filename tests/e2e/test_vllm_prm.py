@@ -1,4 +1,7 @@
 import pytest
+
+pytestmark = pytest.mark.e2e  # Mark all tests in this file as e2e
+
 from reward_hub.vllm.reward import VllmProcessRewardModel
 from reward_hub.base import PRMResult, AggregationMethod
 

@@ -2,6 +2,8 @@
 
 import pytest
 
+pytestmark = pytest.mark.unit
+
 
 class TestAutoRMLoad:
     """Test AutoRM.load() factory method"""

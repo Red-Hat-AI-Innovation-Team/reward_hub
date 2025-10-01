@@ -3,6 +3,8 @@
 import pytest
 from reward_hub.base import AggregationMethod, PRMResult
 
+pytestmark = pytest.mark.unit
+
 
 class TestAggregationMethod:
     """Test AggregationMethod enum"""

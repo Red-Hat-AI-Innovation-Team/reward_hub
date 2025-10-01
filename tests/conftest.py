@@ -1,4 +1,11 @@
-"""Shared pytest fixtures and configuration for RewardHub tests"""
+"""Shared pytest fixtures and configuration for RewardHub tests
+
+Dual-mode operation:
+- Unit tests (default): All model loading is mocked to prevent actual downloads
+- E2E tests (with -m e2e): Real model loading for integration testing
+
+The mocking is automatically disabled when running e2e tests.
+"""
 
 import sys
 import pytest
@@ -8,8 +15,19 @@ from unittest.mock import MagicMock, Mock, patch
 def pytest_configure(config):
     """
     Pytest hook that runs BEFORE test collection.
-    Mock heavy dependencies here to prevent actual model loading.
+    Mock heavy dependencies to prevent actual model loading in unit tests.
+    Mocking is automatically skipped for e2e tests.
     """
+    # Check if we're running e2e tests (which need real imports)
+    markexpr = config.getoption("-m", default="")
+    is_e2e = "e2e" in markexpr and "not e2e" not in markexpr
+
+    # Skip mocking for e2e tests
+    if is_e2e:
+        print("\n🔧 E2E mode: Using real model imports (no mocking)")
+        return
+
+    print("\n✓ Unit test mode: Mocking transformers and vllm")
     # Mock VLLM completely
     mock_vllm = MagicMock()
     mock_vllm.LLM = MagicMock

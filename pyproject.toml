@@ -59,7 +59,7 @@ include = ["reward_hub*"]
 universal = true
 
 [tool.pytest.ini_options]
-testpaths = ["tests/unit"]
+testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
@@ -67,8 +67,13 @@ addopts = [
     "-v",
     "--strict-markers",
     "--tb=short",
+    "-m", "not e2e",  # Skip e2e tests by default
 ]
 markers = [
-    "unit: Unit tests with mocks (default, runs in CI/CD)",
-    "e2e: End-to-end tests that load actual models (manual only, excluded from CI/CD)",
+    "unit: Unit tests with mocks (fast, no model loading)",
+    "e2e: End-to-end tests with actual models (requires GPU and --e2e flag)",
 ]
+# Dual-mode operation:
+# - Default: pytest              → runs unit tests only (mocked)
+# - E2E:     pytest -m e2e       → runs e2e tests only (real models)
+# - All:     pytest -m ""        → runs all tests (mocked for unit, real for e2e)

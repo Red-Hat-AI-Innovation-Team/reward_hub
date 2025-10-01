@@ -1,4 +1,8 @@
+import pytest
 import unittest
+
+pytestmark = pytest.mark.e2e  # Mark all tests in this file as e2e
+
 from reward_hub import AutoRM
 from reward_hub.base import PRMResult
 

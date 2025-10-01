@@ -5,6 +5,8 @@ from unittest.mock import MagicMock, patch
 
 from reward_hub.drsow import DrSow, DrSowConfig
 
+pytestmark = pytest.mark.unit
+
 
 class TestDrSowConfig:
     """Test DrSowConfig dataclass"""

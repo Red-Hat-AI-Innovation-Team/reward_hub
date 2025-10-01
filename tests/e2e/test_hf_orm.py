@@ -1,4 +1,8 @@
+import pytest
 from reward_hub.hf.reward import HuggingFaceOutcomeRewardModel
+
+
+pytestmark = pytest.mark.e2e  # Mark all tests in this file as e2e
 
 class TestHuggingFaceOutcomeRM:
     def test_internlm_orm(self):
