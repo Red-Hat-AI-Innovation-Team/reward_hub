@@ -12,7 +12,7 @@ class TestAutoRMLoad:
         """Load model with HF backend"""
         from reward_hub import AutoRM
 
-        result = AutoRM.load("Qwen/Qwen2.5-Math-PRM-7B", "hf", device=0)
+        result = AutoRM.load("Qwen/Qwen2.5-Math-PRM-7B", "hf")
         assert result is not None
 
     def test_load_with_vllm_backend(self):
@@ -48,5 +48,5 @@ class TestAutoRMLoad:
         from reward_hub import AutoRM
 
         # Should not raise, just verify it works
-        result = AutoRM.load("Qwen/Qwen2.5-Math-PRM-7B", "hf", device=0, custom_arg="value")
+        result = AutoRM.load("Qwen/Qwen2.5-Math-PRM-7B", "hf", custom_arg="value")
         assert result is not None

@@ -41,7 +41,6 @@ def pytest_configure(config):
         m = MagicMock()
         m.eval.return_value = m
         m.get_score.return_value = 0.85
-        m.device = kwargs.get('device_map', 'cuda:0')
         return m
 
     def create_mock_tokenizer(*args, **kwargs):

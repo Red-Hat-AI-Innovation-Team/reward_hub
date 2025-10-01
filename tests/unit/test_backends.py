@@ -16,7 +16,7 @@ class TestHuggingFaceBackends:
         """HF ORM loads and scores conversations"""
         from reward_hub.hf.reward import HuggingFaceOutcomeRewardModel
 
-        model = HuggingFaceOutcomeRewardModel("internlm/internlm2-7b-reward", device=0)
+        model = HuggingFaceOutcomeRewardModel("internlm/internlm2-7b-reward")
 
         # Test single conversation (auto-converted to batch)
         scores = model.score([{"role": "user", "content": "Q"}])
@@ -31,7 +31,7 @@ class TestHuggingFaceBackends:
         from reward_hub.hf.reward import HuggingFaceProcessRewardModel
 
         with patch('reward_hub.hf.reward.make_step_rewards', return_value=[[0.9, 0.8, 0.7]]):
-            model = HuggingFaceProcessRewardModel("Qwen/Qwen2.5-Math-PRM-7B", device=0)
+            model = HuggingFaceProcessRewardModel("Qwen/Qwen2.5-Math-PRM-7B")
 
             messages = [[{"role": "user", "content": "Q"}, {"role": "assistant", "content": "A"}]]
 
@@ -126,7 +126,7 @@ class TestBackendErrors:
         """HF backends raise error for unsupported models"""
         from reward_hub.hf.reward import HuggingFaceOutcomeRewardModel
 
-        model = HuggingFaceOutcomeRewardModel("unsupported/model", device=0)
+        model = HuggingFaceOutcomeRewardModel("unsupported/model")
 
         with pytest.raises(ValueError, match="not supported"):
             model.score([[{"role": "user", "content": "Q"}]])
