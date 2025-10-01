@@ -53,3 +53,7 @@ jobs:
         uv run python -c "from reward_hub import AutoRM; print('✓ AutoRM imported successfully')"
         uv run python -c "from reward_hub.base import AbstractOutcomeRewardModel, AbstractProcessRewardModel; print('✓ Base classes imported successfully')"
         uv run python -c "from reward_hub.drsow import DrSow, DrSowConfig; print('✓ DrSow imported successfully')"
+
+    - name: Run unit tests
+      run: |
+        uv run pytest tests/unit/ -v --tb=short

@@ -41,7 +41,8 @@ local_scheme = "no-local-version"
 
 [project.optional-dependencies]
 dev = [
-    "pytest",
+    "pytest>=7.0.0",
+    "pytest-mock>=3.10.0",
     "pre-commit>=3.0.4,<4.0",
     "ruff>=0.10.0"
 ]
@@ -56,3 +57,23 @@ include = ["reward_hub*"]
 
 [tool.distutils.bdist_wheel]
 universal = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+    "-m", "not e2e",  # Skip e2e tests by default
+]
+markers = [
+    "unit: Unit tests with mocks (fast, no model loading)",
+    "e2e: End-to-end tests with actual models (requires GPU and --e2e flag)",
+]
+# Dual-mode operation:
+# - Default: pytest              → runs unit tests only (mocked)
+# - E2E:     pytest -m e2e       → runs e2e tests only (real models)
+# - All:     pytest -m ""        → runs all tests (mocked for unit, real for e2e)

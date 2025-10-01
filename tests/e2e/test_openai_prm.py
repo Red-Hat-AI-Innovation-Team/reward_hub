@@ -1,6 +1,9 @@
-# Test the OpenAI PRM
+import pytest
 from reward_hub.openai.reward import OpenAIProcessRewardModel
 from reward_hub.vllm.reward import AggregationMethod, PRMResult
+
+pytestmark = pytest.mark.e2e  # Mark all tests in this file as e2e
+
 
 class TestOpenAIProcessRM:
     def test_openai_prm_prod_aggregation(self):
