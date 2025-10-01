@@ -27,18 +27,11 @@ classifiers = [
 dynamic = ["version"]
 requires-python = ">=3.9"
 dependencies = [
-<<<<<<< HEAD
-    "vllm",
-=======
->>>>>>> fix/fix_vllm_model_args
     "transformers==4.53.2",
     "numpy",
     "requests",
     "openai",
-<<<<<<< HEAD
-=======
     "vllm>=0.10.0"
->>>>>>> fix/fix_vllm_model_args
 ]
 
 [tool.setuptools_scm]
