@@ -8,7 +8,7 @@
 ### Installation
 
 #### Basic Installation
-For core functionality with HuggingFace and OpenAI backends:
+For all functionality including HuggingFace, VLLM, and OpenAI backends:
 
 ```bash
 git clone https://github.com/Red-Hat-AI-Innovation-Team/reward_hub.git
@@ -16,18 +16,11 @@ cd reward_hub
 pip install -e .
 ```
 
-#### VLLM Backend Support
-To use VLLM-based features, install with the optional VLLM dependencies:
-
-```bash
-pip install -e .[vllm]
-```
-
 #### Development Installation
-For development with all dependencies:
+For development with additional tools (pytest, ruff, pre-commit):
 
 ```bash
-pip install -e .[dev,vllm]
+pip install -e .[dev]
 ```
 
 ### Usage Examples
