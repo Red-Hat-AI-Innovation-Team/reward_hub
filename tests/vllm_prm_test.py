@@ -6,7 +6,6 @@ class TestVLLMProcessRM:
     def test_vllm_prm_prod_aggregation(self):
         model = VllmProcessRewardModel(
             model_name="Qwen/Qwen2.5-Math-PRM-7B",
-            device=0
         )
         
         messages = [
@@ -31,7 +30,6 @@ class TestVLLMProcessRM:
     def test_vllm_prm_last_aggregation(self):
         model = VllmProcessRewardModel(
             model_name="Qwen/Qwen2.5-Math-PRM-7B",
-            device=0
         )
         
         messages = [
@@ -56,7 +54,6 @@ class TestVLLMProcessRM:
     def test_vllm_prm_full_results(self):
         model = VllmProcessRewardModel(
             model_name="Qwen/Qwen2.5-Math-PRM-7B",
-            device=0
         )
         
         messages = [
@@ -81,7 +78,6 @@ class TestVLLMProcessRM:
     def test_vllm_prm_model_aggregation(self):
         model = VllmProcessRewardModel(
             model_name="Qwen/Qwen2.5-Math-PRM-7B",
-            device=0
         )
         
         messages = [
@@ -107,7 +103,6 @@ class TestVLLMProcessRM:
         with pytest.raises(ValueError):
             model = VllmProcessRewardModel(
                 model_name="invalid_model",
-                device=0
             )
             messages = [
                 [
