@@ -38,16 +38,43 @@ class PRMResult:
         
 
 class AbstractOutcomeRewardModel(ABC):
-    """abstract base class for outcome reward models"""
+    """
+    Abstract base class for outcome reward models and judge models
+    
+    This class supports both traditional reward models and LLM-based judge models
+    that evaluate conversation outcomes and quality.
+    """
 
     @abstractmethod
-    def score(self, messages: Union[List[List[dict]], List[dict]], max_input_tokens: int = 8196) -> List[float]:
+    def score(self, messages: Union[List[List[dict]], List[dict]], **kwargs) -> Union[List[float], float]:
         """
-        Score responses using the OpenAI chat completion format.
-        If messages is a list of list of dicts, then each list of dicts is a conversation.
-        If messages is a list of dicts, then it is a single conversation.
+        Score responses/conversations using the OpenAI chat completion format.
+        
+        Args:
+            messages: Either a single conversation (List[dict]) or multiple conversations (List[List[dict]])
+            **kwargs: Additional parameters (e.g., max_input_tokens, top_n, criterion, etc.)
+            
+        Returns:
+            For single conversation: float (single score)
+            For multiple conversations: List[float] (list of scores)
         """
         pass
+    
+    @abstractmethod
+    async def ascore(self, messages: Union[List[List[dict]], List[dict]], **kwargs) -> Union[List[float], float]:
+        """
+        Async version of score method
+        
+        Args:
+            messages: Either a single conversation (List[dict]) or multiple conversations (List[List[dict]])
+            **kwargs: Additional parameters
+            
+        Returns:
+            For single conversation: float (single score)
+            For multiple conversations: List[float] (list of scores)
+        """
+        pass
+    
 
 class AbstractProcessRewardModel(ABC):
     """abstract base class for process reward models"""

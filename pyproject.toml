@@ -31,7 +31,10 @@ dependencies = [
     "numpy",
     "requests",
     "openai",
-    "vllm>=0.10.0"
+    "vllm>=0.10.0",
+    "litellm[proxy]>=1.0.0",
+    "python-dotenv>=1.1.1",
+    "tenacity>=8.0.0",
 ]
 
 [tool.setuptools_scm]
