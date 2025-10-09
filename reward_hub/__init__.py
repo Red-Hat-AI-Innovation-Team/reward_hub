@@ -132,3 +132,31 @@ class AutoJudge:
             category=category
         )
         CriterionRegistry.register(criterion)
+
+
+__all__ = [
+    # Base classes
+    "AbstractAutoRewardModel",
+
+    # AutoRM factory
+    "AutoRM",
+
+    # AutoJudge factory
+    "AutoJudge",
+
+    # Reward models
+    "HuggingFaceOutcomeRewardModel",
+    "HuggingFaceProcessRewardModel",
+    "VllmOutcomeRewardModel",
+    "VllmProcessRewardModel",
+    "OpenAIOutcomeRewardModel",
+    "OpenAIProcessRewardModel",
+
+    # LLM Judge functions
+    "create_pointwise_judge",
+    "create_groupwise_judge",
+    "CriterionRegistry",
+
+    # Utilities
+    "SUPPORTED_BACKENDS",
+]
