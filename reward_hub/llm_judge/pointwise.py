@@ -2,7 +2,7 @@
 
 import litellm
 import asyncio
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Tuple
 from ..base import AbstractOutcomeRewardModel
 from .prompts import CriterionRegistry, POINTWISE_PROCEDURAL
 from .utils import validate_api_configuration, parse_json_response, with_retry
@@ -157,5 +157,88 @@ class PointwiseJudgeModel(AbstractOutcomeRewardModel):
         # Parse numeric score from JSON response
         result = parse_json_response(response_text)
         return float(result["score"])
+    
+    @with_retry(max_attempts=3, min_wait=0.1, max_wait=10.0)
+    async def _ascore_single_with_usage(self, messages: List[dict], **kwargs) -> Tuple[float, litellm.utils.Usage]:
+        """
+        Async score a single conversation with usage information
+        
+        Args:
+            messages: Single conversation in OpenAI chat format
+            **kwargs: Additional arguments passed to LiteLLM
+            
+        Returns:
+            Tuple of (score from 0.0 to 10.0, usage information)
+        """
+        judge_messages = [
+            {"role": "system", "content": self.full_prompt},
+            {"role": "user", "content": f"Evaluate the last assistant message given the context: {messages}"}
+        ]
+        
+        response = await litellm.acompletion(
+            model=self.model,
+            messages=judge_messages,
+            temperature=self.temperature,
+            max_tokens=self.max_tokens,
+            **self.litellm_kwargs,
+            **kwargs
+        )
+        
+        response_text = response.choices[0].message.content
+        # Parse numeric score from JSON response
+        result = parse_json_response(response_text)
+        return float(result["score"]), response.usage
+    
+    async def ascore_with_usage(self, messages: Union[List[List[dict]], List[dict]], **kwargs) -> Tuple[Union[List[float], float], litellm.utils.Usage]:
+        """
+        Async version of score with usage information
+        
+        Args:
+            messages: Either a single conversation (List[dict]) or multiple conversations (List[List[dict]])
+            **kwargs: Additional arguments passed to LiteLLM
+            
+        Returns:
+            Tuple of (scores, usage information)
+            For single conversation: (float, usage)
+            For multiple conversations: (List[float], usage)
+        """
+        # Handle single conversation vs multiple conversations
+        if isinstance(messages[0], dict):
+            # Single conversation: List[dict]
+            return await self._ascore_single_with_usage(messages, **kwargs)
+        else:
+            # Multiple conversations: List[List[dict]]
+            # For multiple conversations, we need to aggregate usage
+            scores = []
+            total_usage = None
+            
+            for conv in messages:
+                score, usage = await self._ascore_single_with_usage(conv, **kwargs)
+                scores.append(score)
+                
+                if total_usage is None:
+                    total_usage = usage
+                else:
+                    # Aggregate usage information
+                    total_usage.prompt_tokens += usage.prompt_tokens
+                    total_usage.completion_tokens += usage.completion_tokens
+                    total_usage.total_tokens += usage.total_tokens
+            
+            return scores, total_usage
+    
+    def score_with_usage(self, messages: Union[List[List[dict]], List[dict]], **kwargs) -> Tuple[Union[List[float], float], litellm.utils.Usage]:
+        """
+        Sync version of score with usage information
+        
+        Args:
+            messages: Either a single conversation (List[dict]) or multiple conversations (List[List[dict]])
+            **kwargs: Additional arguments passed to LiteLLM
+            
+        Returns:
+            Tuple of (scores, usage information)
+            For single conversation: (float, usage)
+            For multiple conversations: (List[float], usage)
+        """
+        return asyncio.run(self.ascore_with_usage(messages, **kwargs))
     
     
