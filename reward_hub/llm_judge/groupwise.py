@@ -6,6 +6,12 @@ from typing import List, Optional, Union, Tuple
 from ..base import AbstractOutcomeRewardModel
 from .prompts import CriterionRegistry, GROUPWISE_PROCEDURAL
 from .utils import validate_api_configuration, parse_json_response, extract_message_content, with_retry
+from pydantic import BaseModel
+
+class JudgeOutput(BaseModel):
+    reasoning: str
+    selected_indices: list[int]
+
 
 
 class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
@@ -117,6 +123,7 @@ class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
             messages=judge_messages,
             temperature=self.temperature,
             max_tokens=self.max_tokens,
+            response_format=JudgeOutput,
             **self.litellm_kwargs,
             **kwargs
         )
