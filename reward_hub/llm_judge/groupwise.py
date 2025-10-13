@@ -192,6 +192,7 @@ class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
         response_text = response.choices[0].message.content
         result = parse_json_response(response_text)
         selected_indices = result["selected_indices"]
+        print("Judge decision reasoning:\n", result["reasoning"])
         
         # Convert to binary scores
         scores = [0.0] * len(conversations)
