@@ -130,14 +130,14 @@ class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
                             "reasoning": {
                                 "type": "string",
                             },
-                            "ranking": {
+                            "selected_indices": {
                                 "type": "array",
                                 "items": {
                                 "type": "number",
                                 }
                             },
                         },
-                        "required": ["reasoning", "ranking"],
+                        "required": ["reasoning", "selected_indices"],
                     },
                 },
                 "strict": True,
@@ -220,17 +220,48 @@ class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
             {"role": "user", "content": f"Conversation Context:\n{context_text}\n\nCandidate Responses:\n{responses_text}"}
         ]
 
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "set_ranking",
+                    "description": "Provide reasoning and ranking",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "reasoning": {
+                                "type": "string",
+                            },
+                            "selected_indices": {
+                                "type": "array",
+                                "items": {
+                                "type": "number",
+                                }
+                            },
+                        },
+                        "required": ["reasoning", "selected_indices"],
+                    },
+                },
+                "strict": True,
+            }
+        ]
+
+
         response = await litellm.acompletion(
             model=self.model,
             messages=judge_messages,
             temperature=self.temperature,
             max_tokens=self.max_tokens,
+            tools=tools,
+            tool_choice="required",
             **self.litellm_kwargs,
             **kwargs
         )
 
         # Parse selected indices from JSON response
-        response_text = response.choices[0].message.content
+        response_text = response.choices[0].message.tool_calls[0].function.arguments
+        print('from reward hub:',response)
+        print('from reward hub: reponse text:',response_text)
         result = parse_json_response(response_text)
         selected_indices = result["selected_indices"]
 
