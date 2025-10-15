@@ -27,7 +27,7 @@ classifiers = [
 dynamic = ["version"]
 requires-python = ">=3.9"
 dependencies = [
-    "transformers>=4.53.2",
+    "transformers==4.53.2",
     "numpy",
     "requests",
     "openai",
