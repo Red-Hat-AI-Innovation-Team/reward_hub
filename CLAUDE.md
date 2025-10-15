@@ -10,8 +10,8 @@ RewardHub is a Python library for reward model annotation and evaluation, suppor
 
 ### Installation
 ```bash
-pip install -e .              # Basic installation
-pip install -e .[dev]         # Development installation (includes pytest, ruff, pre-commit)
+uv pip install -e .              # Basic installation
+uv pip install -e .[dev]         # Development installation (includes pytest, ruff, pre-commit)
 ```
 
 ### Testing
@@ -156,10 +156,31 @@ binary_scores = judge.score(conversations, top_n=2)  # Returns List[float] (0.0 
 
 ### Built-in Criteria
 
-- `overall_quality`: Evaluates general response quality across multiple dimensions (accuracy, completeness, clarity, depth)
-- `tool-judge`: Specialized criterion for evaluating tool usage and workflow progression in multi-step processes
+- `overall_quality`: Evaluates general response quality (accuracy, completeness, clarity, depth, tone)
+- `multi_step_tool_judge`: Evaluates multi-step tool usage and workflow progression
 
-Custom criteria can be registered via `AutoJudge.register_criterion()` for domain-specific evaluation needs.
+### Custom Criterion Registration
+
+**Two-Part Prompt System:**
+- **Criterion Content**: Defines *what* to evaluate (e.g., "accuracy, clarity, completeness")
+- **Procedural Prompt**: Defines *output format* (JSON schema, score range) - handled automatically
+
+**Full Prompt** = Criterion Content + "\n\n" + Procedural Prompt (pointwise or groupwise)
+
+```python
+from reward_hub.llm_judge import CriterionRegistry, create_pointwise_judge
+from reward_hub.llm_judge.prompts import Criterion
+
+# Register custom criterion (focus on WHAT to evaluate, not HOW to respond)
+CriterionRegistry.register(Criterion(
+    name="code_quality",
+    content="Evaluate based on: readability, maintainability, correctness, performance, best practices"
+))
+
+# Use it
+judge = create_pointwise_judge(model="gpt-4o-mini", criterion="code_quality", api_key="...")
+score = judge.score(conversation)  # Returns 0-10 with reasoning
+```
 
 ### LLM Judge Implementation Details
 

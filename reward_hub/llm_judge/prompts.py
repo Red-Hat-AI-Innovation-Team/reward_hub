@@ -41,17 +41,15 @@ Provide your evaluation as a JSON object with this exact format:
 class Criterion:
     """A structured evaluation criterion"""
     name: str
-    prompt_text: str
-    description: str
-    category: Optional[str] = None
-    examples: Optional[List[str]] = None
-    
+    content: str
+    description: Optional[str] = None
+
     def __post_init__(self):
         """Validate criterion after creation"""
-        if not self.name or not self.prompt_text:
-            raise ValueError("Criterion must have name and prompt_text")
-        if len(self.prompt_text.strip()) < 50:
-            raise ValueError("Criterion prompt_text should be descriptive (>50 chars)")
+        if not self.name or not self.content:
+            raise ValueError("Criterion must have name and content")
+        if len(self.content.strip()) < 50:
+            raise ValueError("Criterion content should be descriptive (>50 chars)")
 
 
 class CriterionRegistry:
@@ -67,10 +65,10 @@ class CriterionRegistry:
     
     @classmethod
     def get(cls, name: str) -> str:
-        """Get a criterion prompt text by name"""
+        """Get a criterion content by name"""
         if name not in cls._criteria:
             raise ValueError(f"Criterion '{name}' not found. Available: {list(cls._criteria.keys())}")
-        return cls._criteria[name].prompt_text
+        return cls._criteria[name].content
     
     @classmethod
     def get_criterion(cls, name: str) -> Criterion:
@@ -84,13 +82,6 @@ class CriterionRegistry:
         """List all available criteria names"""
         return list(cls._criteria.keys())
     
-    @classmethod
-    def list_by_category(cls, category: Optional[str] = None) -> List[Criterion]:
-        """List criteria, optionally filtered by category"""
-        criteria = list(cls._criteria.values())
-        if category:
-            criteria = [c for c in criteria if c.category == category]
-        return criteria
     
     @classmethod
     def is_registered(cls, name: str) -> bool:
@@ -102,31 +93,28 @@ class CriterionRegistry:
         """Register built-in quality-focused criteria"""
         cls.register(Criterion(
             name="overall_quality",
-            category="general",
             description="Evaluates general response quality across multiple dimensions",
-            prompt_text="""
+            content="""
 Evaluate the overall quality of the response:
 - Accuracy and correctness of information
 - Completeness in addressing the question
 - Clarity and coherence of explanation
 - Appropriate depth and detail level
 - Professional tone and presentation
-            """.strip(),
-            examples=["Comprehensive technical explanations", "Well-structured tutorials"]
+            """.strip()
         ))
-        
+
         cls.register(Criterion(
-            name="tool-judge",
-            category="workflow",
-            description="Evaluates tool usage and workflow progression in multi-step processes",
-            prompt_text="""
+            name="multi_step_tool_judge",
+            description="Evaluates multi-step tool usage and workflow progression",
+            content="""
 Evaluation Criteria:
 
 1. PROCESS AWARENESS: What stage are we at, and which candidate best advances the workflow?
    - Does the approach match the current stage (planning, data gathering, analysis, completion)?
-   - You should choose the 'think' tool every 3-4 steps to ensure the following actions are still aligned with overall goal.
+   - After several tool calls, you should pause and reflect on the current state of progress, and decide the next best steps.
 
-2. STRATEGIC REASONING: 
+2. STRATEGIC REASONING:
    - Early stages: High-level, flexible planning without premature assumptions
    - Data stages: Validates assumptions before proceeding (test field categories, check availability)
    - Complex requests: Logical problem decomposition
@@ -138,8 +126,7 @@ Evaluation Criteria:
    - Do the steps build logically toward the objective?
 
 Focus: Which candidate makes the best NEXT STEP toward successfully resolving the user's request?
-            """.strip(),
-            examples=["Multi-step workflows", "Tool-based problem solving", "Strategic planning"]
+            """.strip()
         ))
 
 
