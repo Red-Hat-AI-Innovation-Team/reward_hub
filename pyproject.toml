@@ -78,6 +78,8 @@ markers = [
     "e2e: End-to-end tests with actual models (requires GPU and --e2e flag)",
     "asyncio: Async test marker",
 ]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 # Dual-mode operation:
 # - Default: pytest              → runs unit tests only (mocked)
 # - E2E:     pytest -m e2e       → runs e2e tests only (real models)
