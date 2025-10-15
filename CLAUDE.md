@@ -54,16 +54,15 @@ bash scripts/launch_vllm_drsow.sh [strong_model] [weak_model]
 ### Core Components
 
 1. **AutoRM Factory** (`reward_hub/__init__.py`): Main entry point that validates model/backend compatibility and instantiates the appropriate reward model class
-2. **AutoJudge Factory** (`reward_hub/__init__.py`): Factory for creating pointwise/groupwise judge instances with criterion management
-3. **Abstract Base Classes** (`reward_hub/base.py`):
+2. **Abstract Base Classes** (`reward_hub/base.py`):
    - `AbstractOutcomeRewardModel` / `AbstractProcessRewardModel`: Defines reward model interfaces
    - `PRMResult`: Encapsulates step-by-step scores with configurable aggregation (product, min, last, model)
-4. **Backend Implementations**:
+3. **Backend Implementations**:
    - `reward_hub/hf/` - Direct local model loading with HuggingFace transformers
    - `reward_hub/vllm/` - Optimized local serving via VLLM
    - `reward_hub/openai/` - Remote API access for OpenAI-compatible endpoints
-5. **DrSow Module** (`reward_hub/drsow.py`): Parallel multiprocessing for computing density ratios between strong/weak models
-6. **LLM Judge Module** (`reward_hub/llm_judge/`): LiteLLM-based judges for conversation evaluation and ranking
+4. **DrSow Module** (`reward_hub/drsow.py`): Parallel multiprocessing for computing density ratios between strong/weak models
+5. **LLM Judge Module** (`reward_hub/llm_judge/`): LiteLLM-based judges for conversation evaluation and ranking
 
 ### Model Support Matrix
 
@@ -147,7 +146,7 @@ from reward_hub.llm_judge import create_groupwise_judge
 
 judge = create_groupwise_judge(
     model="gpt-4o-mini",
-    criterion="tool-judge",
+    criterion="multi_step_tool_judge",
     api_key="your_api_key"
 )
 

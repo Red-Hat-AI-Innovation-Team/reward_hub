@@ -148,7 +148,7 @@ class TestRetryMechanism:
 
                 judge = create_groupwise_judge(
                     model="gpt-4o-mini",
-                    criterion="tool-judge",
+                    criterion="multi_step_tool_judge",
                     api_key="test-key"
                 )
 
@@ -215,7 +215,7 @@ class TestRetryMechanism:
 
                 judge = create_groupwise_judge(
                     model="gpt-4o-mini",
-                    criterion="tool-judge",
+                    criterion="multi_step_tool_judge",
                     api_key="test-key"
                 )
 
@@ -367,7 +367,7 @@ class TestRetryIntegration:
         with patch('reward_hub.llm_judge.groupwise.validate_api_configuration'):
             groupwise_judge = create_groupwise_judge(
                 model="gpt-4o-mini",
-                criterion="tool-judge",
+                criterion="multi_step_tool_judge",
                 api_key="test-key"
             )
 
