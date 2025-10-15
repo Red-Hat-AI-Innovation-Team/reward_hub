@@ -2,6 +2,7 @@ from typing import Union, List
 from abc import ABC, abstractmethod
 import math
 from enum import Enum
+from dataclasses import dataclass
 
 
 class AggregationMethod(Enum):
@@ -9,6 +10,24 @@ class AggregationMethod(Enum):
     PRODUCT = "prod"
     MIN = "min"
     LAST = "last"
+
+
+@dataclass
+class JudgeResult:
+    """
+    Unified result class for both pointwise and groupwise judge evaluations.
+
+    For pointwise judges:
+        - scores: List[float] containing individual scores (one per conversation)
+        - reasonings: List[str] containing reasoning for each score
+
+    For groupwise judges:
+        - scores: List[float] containing binary scores (1.0 for top-N, 0.0 for others)
+        - reasonings: List[str] with single reasoning explaining the ranking decision
+    """
+    scores: List[float]
+    reasonings: List[str]
+
 
 class PRMResult:
     """
@@ -46,34 +65,44 @@ class AbstractOutcomeRewardModel(ABC):
     """
 
     @abstractmethod
-    def score(self, messages: Union[List[List[dict]], List[dict]], **kwargs) -> Union[List[float], float]:
+    def score(self, messages: Union[List[List[dict]], List[dict]], **kwargs) -> Union[List[float], float, "JudgeResult"]:
         """
         Score responses/conversations using the OpenAI chat completion format.
-        
+
         Args:
             messages: Either a single conversation (List[dict]) or multiple conversations (List[List[dict]])
-            **kwargs: Additional parameters (e.g., max_input_tokens, top_n, criterion, etc.)
-            
+            **kwargs: Additional parameters (e.g., max_input_tokens, top_n, return_judge_reasoning, etc.)
+
         Returns:
             For single conversation: float (single score)
             For multiple conversations: List[float] (list of scores)
+            If return_judge_reasoning=True: JudgeResult with scores and reasonings
         """
         pass
-    
-    @abstractmethod
-    async def ascore(self, messages: Union[List[List[dict]], List[dict]], **kwargs) -> Union[List[float], float]:
+
+    async def ascore(self, messages: Union[List[List[dict]], List[dict]], **kwargs) -> Union[List[float], float, "JudgeResult"]:
         """
-        Async version of score method
-        
+        Async version of score method.
+
+        Default implementation raises NotImplementedError. Subclasses that support async scoring
+        (e.g., LLM judges) should override this method.
+
         Args:
             messages: Either a single conversation (List[dict]) or multiple conversations (List[List[dict]])
-            **kwargs: Additional parameters
-            
+            **kwargs: Additional parameters (e.g., return_judge_reasoning, etc.)
+
         Returns:
             For single conversation: float (single score)
             For multiple conversations: List[float] (list of scores)
+            If return_judge_reasoning=True: JudgeResult with scores and reasonings
+
+        Raises:
+            NotImplementedError: If the subclass does not implement async scoring
         """
-        pass
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not support async scoring. "
+            f"Use the synchronous score() method instead."
+        )
     
 
 class AbstractProcessRewardModel(ABC):
