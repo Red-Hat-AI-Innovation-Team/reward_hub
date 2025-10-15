@@ -5,7 +5,7 @@ import json
 import inspect
 import functools
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-from typing import Callable, TypeVar, Any
+from typing import Callable, TypeVar
 
 T = TypeVar('T')
 

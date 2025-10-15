@@ -27,12 +27,12 @@ classifiers = [
 dynamic = ["version"]
 requires-python = ">=3.9"
 dependencies = [
-    "transformers==4.53.2",
+    "transformers>=4.53.2",
     "numpy",
     "requests",
     "openai",
     "vllm>=0.10.0",
-    "litellm",
+    "litellm[proxy]>=1.70.0",
     "python-dotenv>=1.1.1",
     "tenacity>=8.0.0",
 ]
@@ -75,6 +75,7 @@ addopts = [
 markers = [
     "unit: Unit tests with mocks (fast, no model loading)",
     "e2e: End-to-end tests with actual models (requires GPU and --e2e flag)",
+    "asyncio: Async test marker",
 ]
 # Dual-mode operation:
 # - Default: pytest              → runs unit tests only (mocked)
