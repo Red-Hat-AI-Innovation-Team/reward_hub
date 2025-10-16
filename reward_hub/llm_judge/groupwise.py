@@ -60,13 +60,13 @@ class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
             if [extract_message_content(msg) for msg in conv[:-1]] != first_context:
                 raise ValueError(f"Conversation {i} has different context than conversation 0")
     
-    def score(self, messages: Union[List[List[dict]], List[dict]], top_n: int, return_judge_reasoning: bool = False, **kwargs) -> Union[List[float], JudgeResult]:
+    def score(self, messages: Union[List[List[dict]], List[dict]], top_n: int = 1, return_judge_reasoning: bool = False, **kwargs) -> Union[List[float], JudgeResult]:
         """
         Score conversations using the OpenAI chat completion format
 
         Args:
             messages: Must be multiple conversations (List[List[dict]]) for groupwise ranking
-            top_n: Number of top conversations to select
+            top_n: Number of top conversations to select. Default to top_n = 1, only choose best 1 out of the group. 
             return_judge_reasoning: If True, return JudgeResult with scores and reasonings. If False, return just scores (default).
             **kwargs: Additional arguments passed to LiteLLM
 
@@ -138,13 +138,13 @@ class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
                 scores[idx] = 1.0
         return scores, reasoning
     
-    async def ascore(self, messages: Union[List[List[dict]], List[dict]], top_n: int, return_judge_reasoning: bool = False, **kwargs) -> Union[List[float], JudgeResult]:
+    async def ascore(self, messages: Union[List[List[dict]], List[dict]], top_n: int = 1, return_judge_reasoning: bool = False, **kwargs) -> Union[List[float], JudgeResult]:
         """
         Async version of score
 
         Args:
             messages: Must be multiple conversations (List[List[dict]]) for groupwise ranking
-            top_n: Number of top conversations to select
+            top_n: Number of top conversations to select; default to top_n = 1.
             return_judge_reasoning: If True, return JudgeResult with scores and reasonings. If False, return just scores (default).
             **kwargs: Additional arguments passed to LiteLLM
 
