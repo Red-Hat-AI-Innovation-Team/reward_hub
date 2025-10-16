@@ -100,6 +100,32 @@ scores = model.score([
 ])
 ```
 
+#### LLM-as-a-Judge
+Use LLMs to evaluate conversation quality with customizable criteria:
+
+```python
+from reward_hub.llm_judge import create_pointwise_judge, create_groupwise_judge, CriterionRegistry
+from reward_hub.llm_judge.prompts import Criterion
+
+# Pointwise: Score individual conversations (0-10)
+judge = create_pointwise_judge(model="gpt-4o-mini", criterion="overall_quality", api_key="sk-...")
+score = judge.score([{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}])
+
+# Groupwise: Rank and select top N responses
+judge = create_groupwise_judge(model="gpt-4o-mini", criterion="multi_step_tool_judge", api_key="sk-...")
+scores = judge.score(conversations, top_n=2)  # Returns [1.0, 0.0, 1.0] for top-2
+
+# Custom criteria
+CriterionRegistry.register(Criterion(
+    name="code_quality",
+    content="Evaluate: readability, best practices, error handling, efficiency"
+))
+judge = create_pointwise_judge(model="gpt-4o-mini", criterion="code_quality", api_key="sk-...")
+```
+
+**Built-in criteria:** `overall_quality`, `multi_step_tool_judge`
+**Supported providers:** OpenAI, Anthropic, Google, Azure (via LiteLLM)
+
 ### Supported Backends
 
 RewardHub supports multiple serving backends:

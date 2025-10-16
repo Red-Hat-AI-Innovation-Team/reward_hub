@@ -1,7 +1,7 @@
 """Unit tests for DrSow module"""
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from reward_hub.drsow import DrSow, DrSowConfig
 

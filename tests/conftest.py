@@ -9,7 +9,7 @@ The mocking is automatically disabled when running e2e tests.
 
 import sys
 import pytest
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock
 
 
 def pytest_configure(config):

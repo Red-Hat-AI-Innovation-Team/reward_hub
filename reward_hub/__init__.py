@@ -3,6 +3,7 @@ from .utils import SUPPORTED_BACKENDS
 from reward_hub.hf.reward import HuggingFaceOutcomeRewardModel, HuggingFaceProcessRewardModel
 from reward_hub.vllm.reward import VllmOutcomeRewardModel, VllmProcessRewardModel
 from reward_hub.openai.reward import OpenAIOutcomeRewardModel, OpenAIProcessRewardModel
+from typing import Union, Optional
 import os
 
 
