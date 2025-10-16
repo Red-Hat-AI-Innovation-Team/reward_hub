@@ -32,7 +32,8 @@ dependencies = [
     "requests",
     "openai",
     "vllm>=0.10.0",
-    "litellm[proxy]>=1.70.0",
+    "uvicorn>=0.34"
+    "litellm>=1.70.0",
     "python-dotenv>=1.1.1",
     "tenacity>=8.0.0",
 ]
