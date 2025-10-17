@@ -1,18 +1,22 @@
 from .base import AbstractAutoRewardModel
 from .utils import SUPPORTED_BACKENDS
 from reward_hub.hf.reward import HuggingFaceOutcomeRewardModel, HuggingFaceProcessRewardModel
-from reward_hub.vllm.reward import VllmOutcomeRewardModel, VllmProcessRewardModel
 from reward_hub.openai.reward import OpenAIOutcomeRewardModel, OpenAIProcessRewardModel
-from typing import Union, Optional
 import os
 
 
 load_method_to_class = {
-    "vllm": [VllmOutcomeRewardModel, VllmProcessRewardModel],
     "hf": [HuggingFaceOutcomeRewardModel, HuggingFaceProcessRewardModel],
     "openai": [OpenAIOutcomeRewardModel, OpenAIProcessRewardModel]
 }
 
+# Add VLLM classes if available
+try:
+    from reward_hub.vllm.reward import VllmOutcomeRewardModel, VllmProcessRewardModel
+    load_method_to_class["vllm"] = [VllmOutcomeRewardModel, VllmProcessRewardModel]
+except ImportError:
+    print("VLLM is not installed, skipping VLLM support. To enable VLLM support, install vllm with `pip install reward_hub[vllm]`")
+    load_method_to_class["vllm"] = []
 
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
