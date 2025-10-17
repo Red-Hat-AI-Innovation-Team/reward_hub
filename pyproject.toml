@@ -50,6 +50,7 @@ dev = [
     "pre-commit>=3.0.4,<4.0",
     "ruff>=0.10.0"
 ]
+# Optionally install vllm for locally hosted reward models
 vllm = [
     "vllm>=0.10.0"
 ]
