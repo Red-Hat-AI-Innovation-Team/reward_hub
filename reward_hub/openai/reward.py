@@ -1,10 +1,9 @@
 from transformers import AutoTokenizer
 
 from typing import Union, List
-from reward_hub.base import AbstractOutcomeRewardModel, AbstractProcessRewardModel
+from reward_hub.base import AbstractOutcomeRewardModel, AbstractProcessRewardModel, AggregationMethod, PRMResult
 from reward_hub.openai.vllm_client import vllmClient, HTTPClient
 from reward_hub.drsow import DrSow, DrSowConfig
-from reward_hub.vllm.reward import AggregationMethod, PRMResult
 
 
 class OpenAIOutcomeRewardModel(AbstractOutcomeRewardModel):
