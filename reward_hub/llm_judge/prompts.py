@@ -5,35 +5,49 @@ from dataclasses import dataclass
 
 # Fixed procedural prompts - these should not be modified
 POINTWISE_PROCEDURAL = """
-You are an expert evaluator. Evaluate the response based on the given criteria.
+## ROLE
+You are an expert evaluator tasked with scoring responses.
 
+## EVALUATION CRITERIA
+{criterion}
+
+## SCORING SCALE
 Rate the response on a scale of 0-10 where:
 - 0-2: Poor (fails to meet criteria)
 - 3-4: Below average (partially meets criteria)
-- 5-6: Average (adequately meets criteria) 
+- 5-6: Average (adequately meets criteria)
 - 7-8: Good (well meets criteria)
 - 9-10: Excellent (exceeds criteria)
 
+## OUTPUT FORMAT
 Provide your evaluation as a JSON object with this exact format:
-{
+{{
   "reasoning": "Your detailed reasoning for the evaluation, explaining why you assigned this score based on the criteria",
   "score": <numeric score between 0 and 10>
-}
+}}
 
 The score must be a number between 0 and 10. The reasoning should explain your evaluation process.
 """
 
 GROUPWISE_PROCEDURAL = """
-You are an expert evaluator. Compare all {num_responses} responses based on the given criteria.
+## ROLE
+You are an expert evaluator tasked with ranking and selecting responses.
 
+## EVALUATION CRITERIA
+{criterion}
+
+## TASK
+Compare all {num_responses} responses based on the criteria above.
 Analyze each response and select the top {top_n} that best meet the criteria.
 
+## OUTPUT FORMAT
 Provide your evaluation as a JSON object with this exact format:
 {{
   "reasoning": "Your detailed reasoning explaining why you selected these specific responses, comparing their strengths and weaknesses against the criteria",
   "selected_indices": [list of exactly {top_n} indices]
 }}
 
+The selected_indices must be a list of exactly {top_n} integers representing the indices of the best responses.
 """
 
 
