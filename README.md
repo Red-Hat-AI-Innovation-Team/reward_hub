@@ -16,6 +16,15 @@ cd reward_hub
 pip install -e .
 ```
 
+#### PRM Installation (Qwen-PRM Support)
+If you need to use Qwen Process Reward Models (e.g., `Qwen/Qwen2.5-Math-PRM-7B`), install with the `prm` extra:
+
+```bash
+pip install -e .[prm]
+```
+
+**Note:** This pins `transformers==4.53.2` (instead of the newer `>=4.53.2`) to ensure compatibility with Qwen-PRM models. If you don't need Qwen-PRM support, use the basic installation to get the latest transformers version.
+
 #### Development Installation
 For development with additional tools (pytest, ruff, pre-commit):
 
