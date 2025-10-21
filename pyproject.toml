@@ -48,7 +48,6 @@ dev = [
     "pytest-mock>=3.10.0",
     "pytest-asyncio>=1.1.1",
     "pre-commit>=3.0.4,<4.0",
-    "vllm>=0.10.0"
     "ruff>=0.10.0"
 ]
 # Optionally install vllm for locally hosted reward models
