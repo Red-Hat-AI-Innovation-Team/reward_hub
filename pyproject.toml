@@ -27,13 +27,13 @@ classifiers = [
 dynamic = ["version"]
 requires-python = ">=3.9"
 dependencies = [
-    "transformers==4.53.2",
+    "transformers>=4.53.2",
     "numpy",
     "requests",
-    "openai",
-    "torch",
+    "openai>=1.68.2",
+    "torch>=2.7.0",
     "litellm[proxy]>=1.70.0",
-    "python-dotenv>=1.1.1",
+    "python-dotenv>=1.0.0",
     "tenacity>=8.0.0",
 ]
 
@@ -46,14 +46,19 @@ local_scheme = "no-local-version"
 dev = [
     "pytest>=7.0.0",
     "pytest-mock>=3.10.0",
-    "pytest-asyncio>=1.1.1",
+    "pytest-asyncio>=0.21.0",
     "pre-commit>=3.0.4,<4.0",
-    "vllm>=0.10.0"
     "ruff>=0.10.0"
 ]
 # Optionally install vllm for locally hosted reward models
 vllm = [
     "vllm>=0.10.0"
+]
+
+# Optionally extend support for Qwen-PRM
+prm = [
+    "vllm>=0.10.0",
+    "transformers==4.53.2"
 ]
 
 [project.urls]
