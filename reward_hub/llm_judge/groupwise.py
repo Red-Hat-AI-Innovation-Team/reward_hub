@@ -4,7 +4,7 @@ import litellm
 from typing import List, Optional, Union
 from ..base import AbstractOutcomeRewardModel, JudgeResult
 from .prompts import CriterionRegistry, GROUPWISE_PROCEDURAL
-from .utils import validate_api_configuration, parse_json_response, extract_message_content, with_retry
+from .utils import validate_api_configuration, parse_json_response, extract_message_content, with_retry, deduplicate_conversations
 
 
 class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
@@ -102,14 +102,20 @@ class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
         # Validate all conversations share the same context
         self._validate_shared_context(conversations)
 
-        # Compose full prompt at runtime with variables
-        procedural = GROUPWISE_PROCEDURAL.format(num_responses=len(conversations), top_n=top_n)
+        # Deduplicate based on last assistant message only
+        unique_convs, original_to_unique_map = deduplicate_conversations(conversations, last_message_only=True)
+
+        # Adjust top_n to not exceed unique conversations
+        adjusted_top_n = min(top_n, len(unique_convs))
+
+        # Compose full prompt at runtime with variables (using unique count)
+        procedural = GROUPWISE_PROCEDURAL.format(num_responses=len(unique_convs), top_n=adjusted_top_n)
         full_prompt = f"{self.criterion_text}\n\n{procedural}"
 
-        # Format conversation context and candidate responses
-        context_messages = conversations[0][:-1]
+        # Format conversation context and candidate responses (using unique conversations)
+        context_messages = unique_convs[0][:-1]
         context_text = "\n".join([f"{msg['role'].capitalize()}: {extract_message_content(msg)}" for msg in context_messages])
-        responses_text = "\n".join([f"Response {i}: {extract_message_content(conv[-1])}" for i, conv in enumerate(conversations)])
+        responses_text = "\n".join([f"Response {i}: {extract_message_content(conv[-1])}" for i, conv in enumerate(unique_convs)])
 
         judge_messages = [
             {"role": "system", "content": full_prompt},
@@ -131,11 +137,14 @@ class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
         selected_indices = result["selected_indices"]
         reasoning = result["reasoning"]
 
-        # Convert to binary scores
-        scores = [0.0] * len(conversations)
+        # Convert to binary scores for unique conversations
+        unique_scores = [0.0] * len(unique_convs)
         for idx in selected_indices:
-            if 0 <= idx < len(conversations):
-                scores[idx] = 1.0
+            if 0 <= idx < len(unique_convs):
+                unique_scores[idx] = 1.0
+
+        # Map back to original indices
+        scores = [unique_scores[original_to_unique_map[i]] for i in range(len(conversations))]
         return scores, reasoning
     
     async def ascore(self, messages: Union[List[List[dict]], List[dict]], top_n: int = 1, return_judge_reasoning: bool = False, **kwargs) -> Union[List[float], JudgeResult]:
@@ -180,14 +189,20 @@ class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
         # Validate all conversations share the same context
         self._validate_shared_context(conversations)
 
-        # Compose full prompt at runtime with variables
-        procedural = GROUPWISE_PROCEDURAL.format(num_responses=len(conversations), top_n=top_n)
+        # Deduplicate based on last assistant message only
+        unique_convs, original_to_unique_map = deduplicate_conversations(conversations, last_message_only=True)
+
+        # Adjust top_n to not exceed unique conversations
+        adjusted_top_n = min(top_n, len(unique_convs))
+
+        # Compose full prompt at runtime with variables (using unique count)
+        procedural = GROUPWISE_PROCEDURAL.format(num_responses=len(unique_convs), top_n=adjusted_top_n)
         full_prompt = f"{self.criterion_text}\n\n{procedural}"
 
-        # Format conversation context and candidate responses
-        context_messages = conversations[0][:-1]
+        # Format conversation context and candidate responses (using unique conversations)
+        context_messages = unique_convs[0][:-1]
         context_text = "\n".join([f"{msg['role'].capitalize()}: {extract_message_content(msg)}" for msg in context_messages])
-        responses_text = "\n".join([f"Response {i}: {extract_message_content(conv[-1])}" for i, conv in enumerate(conversations)])
+        responses_text = "\n".join([f"Response {i}: {extract_message_content(conv[-1])}" for i, conv in enumerate(unique_convs)])
 
         judge_messages = [
             {"role": "system", "content": full_prompt},
@@ -209,9 +224,12 @@ class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
         selected_indices = result["selected_indices"]
         reasoning = result["reasoning"]
 
-        # Convert to binary scores
-        scores = [0.0] * len(conversations)
+        # Convert to binary scores for unique conversations
+        unique_scores = [0.0] * len(unique_convs)
         for idx in selected_indices:
-            if 0 <= idx < len(conversations):
-                scores[idx] = 1.0
+            if 0 <= idx < len(unique_convs):
+                unique_scores[idx] = 1.0
+
+        # Map back to original indices
+        scores = [unique_scores[original_to_unique_map[i]] for i in range(len(conversations))]
         return scores, reasoning
