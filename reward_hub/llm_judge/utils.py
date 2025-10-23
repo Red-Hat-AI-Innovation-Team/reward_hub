@@ -5,7 +5,7 @@ import json
 import inspect
 import functools
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-from typing import Callable, TypeVar
+from typing import Callable, TypeVar, List, Tuple
 
 T = TypeVar('T')
 
@@ -117,6 +117,42 @@ def extract_message_content(message: dict) -> str:
         parts.append("\n".join(tool_calls_text))
     
     return "\n".join(parts) if parts else ""
+
+
+def deduplicate_conversations(conversations: List[List[dict]], last_message_only: bool = False) -> Tuple[List[List[dict]], List[int]]:
+    """
+    Deduplicate conversations based on message content.
+
+    Args:
+        conversations: List of conversations in OpenAI chat format
+        last_message_only: If True, deduplicate based on last message only (for groupwise).
+                          If False, deduplicate based on full conversation (for pointwise).
+
+    Returns:
+        Tuple of (unique_conversations, original_to_unique_map) where:
+        - unique_conversations: List of unique conversations
+        - original_to_unique_map: List where original_to_unique_map[i] gives the index
+          in unique_conversations for the i-th original conversation
+    """
+    unique_convs = []
+    key_to_unique_idx = {}
+    original_to_unique_map = []
+
+    for conv in conversations:
+        if last_message_only:
+            # For groupwise: only last assistant message matters
+            key = extract_message_content(conv[-1])
+        else:
+            # For pointwise: full conversation matters
+            key = tuple(extract_message_content(msg) for msg in conv)
+
+        if key not in key_to_unique_idx:
+            key_to_unique_idx[key] = len(unique_convs)
+            unique_convs.append(conv)
+
+        original_to_unique_map.append(key_to_unique_idx[key])
+
+    return unique_convs, original_to_unique_map
 
 
 def with_retry(

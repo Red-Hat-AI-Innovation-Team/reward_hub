@@ -5,7 +5,7 @@ import asyncio
 from typing import List, Optional, Union
 from ..base import AbstractOutcomeRewardModel, JudgeResult
 from .prompts import CriterionRegistry, POINTWISE_PROCEDURAL
-from .utils import validate_api_configuration, parse_json_response, with_retry
+from .utils import validate_api_configuration, parse_json_response, with_retry, deduplicate_conversations
 
 
 class PointwiseJudgeModel(AbstractOutcomeRewardModel):
@@ -80,9 +80,16 @@ class PointwiseJudgeModel(AbstractOutcomeRewardModel):
             return score
         else:
             # Multiple conversations: List[List[dict]]
-            results = [self._score_single(conv, **kwargs) for conv in messages]
-            scores = [r[0] for r in results]
-            reasonings = [r[1] for r in results]
+            # Deduplicate based on full conversation
+            unique_convs, original_to_unique_map = deduplicate_conversations(messages, last_message_only=False)
+
+            # Score only unique conversations
+            unique_results = [self._score_single(conv, **kwargs) for conv in unique_convs]
+
+            # Map back to original indices
+            scores = [unique_results[original_to_unique_map[i]][0] for i in range(len(messages))]
+            reasonings = [unique_results[original_to_unique_map[i]][1] for i in range(len(messages))]
+
             if return_judge_reasoning:
                 return JudgeResult(scores=scores, reasonings=reasonings)
             return scores
@@ -143,9 +150,16 @@ class PointwiseJudgeModel(AbstractOutcomeRewardModel):
             return score
         else:
             # Multiple conversations: List[List[dict]]
-            results = await asyncio.gather(*[self._ascore_single(conv, **kwargs) for conv in messages])
-            scores = [r[0] for r in results]
-            reasonings = [r[1] for r in results]
+            # Deduplicate based on full conversation
+            unique_convs, original_to_unique_map = deduplicate_conversations(messages, last_message_only=False)
+
+            # Score only unique conversations in parallel
+            unique_results = await asyncio.gather(*[self._ascore_single(conv, **kwargs) for conv in unique_convs])
+
+            # Map back to original indices
+            scores = [unique_results[original_to_unique_map[i]][0] for i in range(len(messages))]
+            reasonings = [unique_results[original_to_unique_map[i]][1] for i in range(len(messages))]
+
             if return_judge_reasoning:
                 return JudgeResult(scores=scores, reasonings=reasonings)
             return scores
