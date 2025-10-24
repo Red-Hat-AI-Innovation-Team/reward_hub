@@ -122,8 +122,6 @@ Evaluate the overall quality of the response:
             name="multi_step_tool_judge",
             description="Evaluates multi-step tool usage and workflow progression",
             content="""
-Evaluation Criteria:
-
 1. PROCESS AWARENESS: What stage are we at, and which candidate best advances the workflow?
    - Does the approach match the current stage (planning, data gathering, analysis, completion)?
    - After several tool calls, you should pause and reflect on the current state of progress, and decide the next best steps.
