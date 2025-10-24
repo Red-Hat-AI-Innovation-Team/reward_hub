@@ -60,34 +60,34 @@ class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
             if [extract_message_content(msg) for msg in conv[:-1]] != first_context:
                 raise ValueError(f"Conversation {i} has different context than conversation 0")
     
-    def score(self, messages: Union[List[List[dict]], List[dict]], top_n: int = 1, return_judge_reasoning: bool = False, **kwargs) -> Union[List[float], JudgeResult]:
+    def score(self, messages: Union[List[List[dict]], List[dict]], top_n: int = 1, return_judge_reasoning: bool = False, **kwargs) -> Union[List[float], JudgeResult, tuple[Union[List[float], JudgeResult], litellm.utils.Usage]]:
         """
         Score conversations using the OpenAI chat completion format
 
         Args:
             messages: Must be multiple conversations (List[List[dict]]) for groupwise ranking
-            top_n: Number of top conversations to select. Default to top_n = 1, only choose best 1 out of the group. 
+            top_n: Number of top conversations to select. Default to top_n = 1, only choose best 1 out of the group.
             return_judge_reasoning: If True, return JudgeResult with scores and reasonings. If False, return just scores (default).
             **kwargs: Additional arguments passed to LiteLLM
 
         Returns:
             If return_judge_reasoning=False:
-                List[float]: Binary scores (1.0 for top-N selected, 0.0 for others)
+                Tuple of (List[float], litellm.utils.Usage): Binary scores and usage statistics
             If return_judge_reasoning=True:
-                JudgeResult with scores and reasonings lists
+                Tuple of (JudgeResult, litellm.utils.Usage): JudgeResult with scores and reasonings, and usage statistics
         """
         # Groupwise judges require multiple conversations
         if isinstance(messages[0], dict):
             raise ValueError("GroupwiseJudgeModel requires multiple conversations, got single conversation")
 
         conversations = messages  # List[List[dict]]
-        scores, reasoning = self._score_groupwise(conversations, top_n, **kwargs)
+        scores, reasoning, usage = self._score_groupwise(conversations, top_n, **kwargs)
         if return_judge_reasoning:
-            return JudgeResult(scores=scores, reasonings=[reasoning])
-        return scores
+            return JudgeResult(scores=scores, reasonings=[reasoning]), usage
+        return scores, usage
     
     @with_retry(max_attempts=3, min_wait=0.1, max_wait=10.0)
-    def _score_groupwise(self, conversations: List[List[dict]], top_n: int, **kwargs) -> tuple[List[float], str]:
+    def _score_groupwise(self, conversations: List[List[dict]], top_n: int, **kwargs) -> tuple[List[float], str, litellm.utils.Usage]:
         """
         Score conversations with binary ranking
 
@@ -97,7 +97,7 @@ class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
             **kwargs: Additional arguments passed to LiteLLM
 
         Returns:
-            Tuple of (scores, reasoning) where scores is list of binary scores (1.0 for top-N selected, 0.0 for others)
+            Tuple of (scores, reasoning, usage) where scores is list of binary scores (1.0 for top-N selected, 0.0 for others)
         """
         # Validate all conversations share the same context
         self._validate_shared_context(conversations)
@@ -139,9 +139,9 @@ class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
         for idx in selected_indices:
             if 0 <= idx < len(conversations):
                 scores[idx] = 1.0
-        return scores, reasoning
+        return scores, reasoning, response.usage
     
-    async def ascore(self, messages: Union[List[List[dict]], List[dict]], top_n: int = 1, return_judge_reasoning: bool = False, **kwargs) -> Union[List[float], JudgeResult]:
+    async def ascore(self, messages: Union[List[List[dict]], List[dict]], top_n: int = 1, return_judge_reasoning: bool = False, **kwargs) -> Union[List[float], JudgeResult, tuple[Union[List[float], JudgeResult], litellm.utils.Usage]]:
         """
         Async version of score
 
@@ -153,22 +153,22 @@ class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
 
         Returns:
             If return_judge_reasoning=False:
-                List[float]: Binary scores (1.0 for top-N selected, 0.0 for others)
+                Tuple of (List[float], litellm.utils.Usage): Binary scores and usage statistics
             If return_judge_reasoning=True:
-                JudgeResult with scores and reasonings lists
+                Tuple of (JudgeResult, litellm.utils.Usage): JudgeResult with scores and reasonings, and usage statistics
         """
         # Groupwise judges require multiple conversations
         if isinstance(messages[0], dict):
             raise ValueError("GroupwiseJudgeModel requires multiple conversations, got single conversation")
 
         conversations = messages  # List[List[dict]]
-        scores, reasoning = await self._ascore_groupwise(conversations, top_n, **kwargs)
+        scores, reasoning, usage = await self._ascore_groupwise(conversations, top_n, **kwargs)
         if return_judge_reasoning:
-            return JudgeResult(scores=scores, reasonings=[reasoning])
-        return scores
+            return JudgeResult(scores=scores, reasonings=[reasoning]), usage
+        return scores, usage
     
     @with_retry(max_attempts=3, min_wait=0.1, max_wait=10.0)
-    async def _ascore_groupwise(self, conversations: List[List[dict]], top_n: int, **kwargs) -> tuple[List[float], str]:
+    async def _ascore_groupwise(self, conversations: List[List[dict]], top_n: int, **kwargs) -> tuple[List[float], str, litellm.utils.Usage]:
         """
         Async score conversations with binary ranking
 
@@ -178,7 +178,7 @@ class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
             **kwargs: Additional arguments passed to LiteLLM
 
         Returns:
-            Tuple of (scores, reasoning) where scores is list of binary scores (1.0 for top-N selected, 0.0 for others)
+            Tuple of (scores, reasoning, usage) where scores is list of binary scores (1.0 for top-N selected, 0.0 for others)
         """
         # Validate all conversations share the same context
         self._validate_shared_context(conversations)
@@ -220,4 +220,4 @@ class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
         for idx in selected_indices:
             if 0 <= idx < len(conversations):
                 scores[idx] = 1.0
-        return scores, reasoning
+        return scores, reasoning, response.usage
