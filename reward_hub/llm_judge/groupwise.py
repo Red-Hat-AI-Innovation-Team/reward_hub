@@ -102,9 +102,12 @@ class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
         # Validate all conversations share the same context
         self._validate_shared_context(conversations)
 
-        # Compose full prompt at runtime with variables
-        procedural = GROUPWISE_PROCEDURAL.format(num_responses=len(conversations), top_n=top_n)
-        full_prompt = f"{self.criterion_text}\n\n{procedural}"
+        # Compose full prompt by inserting criterion and runtime variables into procedural template
+        full_prompt = GROUPWISE_PROCEDURAL.format(
+            criterion=self.criterion_text,
+            num_responses=len(conversations),
+            top_n=top_n
+        )
 
         # Format conversation context and candidate responses
         context_messages = conversations[0][:-1]
@@ -180,9 +183,12 @@ class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
         # Validate all conversations share the same context
         self._validate_shared_context(conversations)
 
-        # Compose full prompt at runtime with variables
-        procedural = GROUPWISE_PROCEDURAL.format(num_responses=len(conversations), top_n=top_n)
-        full_prompt = f"{self.criterion_text}\n\n{procedural}"
+        # Compose full prompt by inserting criterion and runtime variables into procedural template
+        full_prompt = GROUPWISE_PROCEDURAL.format(
+            criterion=self.criterion_text,
+            num_responses=len(conversations),
+            top_n=top_n
+        )
 
         # Format conversation context and candidate responses
         context_messages = conversations[0][:-1]

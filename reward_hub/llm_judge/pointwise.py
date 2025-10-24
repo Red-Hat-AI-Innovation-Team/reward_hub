@@ -42,9 +42,9 @@ class PointwiseJudgeModel(AbstractOutcomeRewardModel):
         self.max_tokens = max_tokens
         self.litellm_kwargs = litellm_kwargs
 
-        # Compose full prompt from criterion + procedural
+        # Compose full prompt by inserting criterion into procedural template
         criterion_text = CriterionRegistry.get(criterion)
-        self.full_prompt = f"{criterion_text}\n\n{POINTWISE_PROCEDURAL}"
+        self.full_prompt = POINTWISE_PROCEDURAL.format(criterion=criterion_text)
 
         # Set up LiteLLM configuration
         if api_key:
