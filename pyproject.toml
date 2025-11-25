@@ -52,12 +52,12 @@ dev = [
 ]
 # Optionally install vllm for locally hosted reward models
 vllm = [
-    "vllm>=0.10.0"
+    "vllm<=0.9.1"
 ]
 
 # Optionally extend support for Qwen-PRM
 prm = [
-    "vllm>=0.10.0",
+    "vllm<=0.9.1",
     "transformers==4.53.2"
 ]
 
