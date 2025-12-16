@@ -2,12 +2,12 @@
 
 **RewardHub** is an end-to-end library for annotating data using state-of-the-art (SoTA) reward models, critic functions, and related processes. It is designed to facilitate the generation of preference training data or define acceptance criteria for agentic or inference scaling systems such as Best-of-N sampling or Beam-Search.
 
-
 ## Getting Started
 
 ### Installation
 
 #### Basic Installation
+
 For all functionality including HuggingFace, VLLM, and OpenAI backends:
 
 ```bash
@@ -17,15 +17,15 @@ pip install -e .
 ```
 
 #### PRM Installation (Qwen-PRM Support)
+
 If you need to use Qwen Process Reward Models (e.g., `Qwen/Qwen2.5-Math-PRM-7B`), install with the `prm` extra:
 
 ```bash
 pip install -e .[prm]
 ```
 
-**Note:** This pins `transformers==4.53.2` (instead of the newer `>=4.53.2`) to ensure compatibility with Qwen-PRM models. If you don't need Qwen-PRM support, use the basic installation to get the latest transformers version.
-
 #### Development Installation
+
 For development with additional tools (pytest, ruff, pre-commit):
 
 ```bash
@@ -37,6 +37,7 @@ pip install -e .[dev]
 RewardHub supports multiple types of reward models and serving methods. Here are the main ways to use the library:
 
 #### Process Reward Models (PRM)
+
 PRMs evaluate responses by analyzing the reasoning process:
 
 ```python
@@ -60,6 +61,7 @@ scores = model.score(messages, return_full_prm_result=False)
 ```
 
 #### Outcome Reward Models (ORM)
+
 ORMs focus on evaluating the final response quality:
 
 ```python
@@ -77,6 +79,7 @@ scores = model.score([
 ```
 
 #### DrSow Reward Model
+
 DrSow uses density ratios between strong and weak models to evaluate responses:
 
 Launch the strong and weak models first.
@@ -110,6 +113,7 @@ scores = model.score([
 ```
 
 #### LLM-as-a-Judge
+
 Use LLMs to evaluate conversation quality with customizable criteria:
 
 ```python
@@ -147,17 +151,17 @@ RewardHub supports multiple serving backends:
 
 We support various reward models including:
 
-| Model | Type | HuggingFace | VLLM | OpenAI |
-|-------|------|-------------|------|---------|
-| `Qwen/Qwen2.5-Math-PRM-7B` | PRM | ✓ | ✓ | ✗ |
-| `internlm/internlm2-7b-reward` | ORM | ✓ | ✗ | ✗ |
-| `RLHFlow/Llama3.1-8B-PRM-Deepseek-Data` | PRM | ✓ | ✗ | ✗ |
-| `RLHFlow/ArmoRM-Llama3-8B-v0.1` | ORM | ✗ | ✗ | ✗ |
-| `drsow` | ORM | ✗ | ✗ | ✓ |
+| Model                                   | Type | HuggingFace | VLLM | OpenAI |
+| --------------------------------------- | ---- | ----------- | ---- | ------ |
+| `Qwen/Qwen2.5-Math-PRM-7B`              | PRM  | ✓           | ✓    | ✗      |
+| `internlm/internlm2-7b-reward`          | ORM  | ✓           | ✗    | ✗      |
+| `RLHFlow/Llama3.1-8B-PRM-Deepseek-Data` | PRM  | ✓           | ✗    | ✗      |
+| `RLHFlow/ArmoRM-Llama3-8B-v0.1`         | ORM  | ✗           | ✗    | ✗      |
+| `drsow`                                 | ORM  | ✗           | ✗    | ✓      |
 
 ## Research
 
 **RewardHub** serves as the official implementation of the paper:  
-[**Dr. SoW: Density Ratio of Strong-over-weak LLMs for Reducing the Cost of Human Annotation in Preference Tuning**](https://arxiv.org/pdf/2411.02481)  
+[**Dr. SoW: Density Ratio of Strong-over-weak LLMs for Reducing the Cost of Human Annotation in Preference Tuning**](https://arxiv.org/pdf/2411.02481)
 
 The paper introduces CDR, a novel approach to generating high-quality preference annotations using density ratios tailored to domain-specific needs.
