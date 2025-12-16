@@ -206,7 +206,7 @@ class HuggingFaceProcessRewardModel(AbstractProcessRewardModel):
                 ).to(self.model.device)
                 step_sep_id = self.tokenizer.encode("<extra_0>")[0]
                 token_masks = (all_input_ids == step_sep_id)
-                all_outputs = self.model(input_ids=all_input_ids)
+                all_outputs = self.model(input_ids=all_input_ids, use_cache=False)
                 all_scores.append(make_step_rewards(all_outputs[0], token_masks)[0])
         else:
             raise ValueError(f"Model {self.model_name} is not supported")
