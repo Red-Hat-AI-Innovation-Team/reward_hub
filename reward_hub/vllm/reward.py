@@ -79,7 +79,7 @@ class VllmProcessRewardModel(AbstractProcessRewardModel):
                 max_length=max_input_tokens
             ).input_ids
             batch_decoded = self.tokenizer.batch_decode(all_input_ids, skip_special_tokens=False)
-            all_outputs = self.model.encode(batch_decoded, use_tqdm=use_tqdm)
+            all_outputs = self.model.encode(batch_decoded, use_tqdm=use_tqdm, pooling_task="token_classify")
             all_scores = [[d[-1].item() for d in ex.outputs.data] for ex in all_outputs]
 
         else:
