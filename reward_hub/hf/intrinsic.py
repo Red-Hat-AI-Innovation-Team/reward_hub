@@ -2,13 +2,13 @@
 
 import logging
 import math
+from typing import Union, List
 
 import torch
 import torch.nn.functional as F
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from its_hub.base import AbstractProcessRewardModel
-from its_hub.types import ChatMessage, ChatMessages
+from reward_hub.base import AbstractProcessRewardModel
 
 logger = logging.getLogger(__name__)
 
@@ -22,54 +22,35 @@ class HuggingFaceIntrinsicRewardModel(AbstractProcessRewardModel):
         - entropy: Sum of negative normalized entropy (higher = more confident)
     """
 
-    def __init__(
-        self,
-        model_name: str = "Qwen/Qwen2.5-1.5B-Instruct",
-        device: str = "auto",
-        scoring_method: str = "likelihood",
-        temperature: float = 1.0,
-        max_length: int = 4096,
-        trust_remote_code: bool = False,
-    ):
+    def __init__(self, model_name: str = "Qwen/Qwen2.5-1.5B-Instruct",
+                 scoring_method: str = "likelihood",
+                 temperature: float = 1.0,
+                 max_length: int = 4096,
+                 **kwargs):
         """
-        Initialize the HuggingFace native likelihood reward model.
+        Initialize the HuggingFace intrinsic reward model.
 
         Args:
             model_name: Name or path of the HuggingFace model
-            device: Device to load model on ("auto", "cuda", "cpu")
             scoring_method: What to score ("likelihood" or "entropy")
             temperature: Temperature for probability scaling
             max_length: Maximum sequence length for tokenization
-            trust_remote_code: Whether to trust remote code when loading model
         """
         self.model_name = model_name
         self.scoring_method = scoring_method
         self.temperature = temperature
         self.max_length = max_length
 
-        # Load tokenizer
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            model_name, trust_remote_code=trust_remote_code
-        )
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
 
-        # Ensure tokenizer has a pad token
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
-        # Load model
-        model_kwargs = {"trust_remote_code": trust_remote_code}
-
-        self.model = AutoModelForCausalLM.from_pretrained(model_name, **model_kwargs)
-
-        # Resolve device (auto -> cuda if available, else cpu)
-        if device == "auto":
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        else:
-            self.device = device
-
-        # Move model to device and set to eval mode
-        self.model = self.model.to(self.device)
-        self.model.eval()
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            torch_dtype=torch.bfloat16,
+            trust_remote_code=True
+        ).eval()
 
     def _tokenize_prompt_response(self, prompt: str, response: str):
         """Tokenize prompt and response, returning input_ids and response start index."""
@@ -97,14 +78,14 @@ class HuggingFaceIntrinsicRewardModel(AbstractProcessRewardModel):
         }
 
     def _compute_token_log_probs(
-        self, input_ids: list[int], response_start: int, response_length: int
-    ) -> list[float]:
+        self, input_ids: List[int], response_start: int, response_length: int
+    ) -> List[float]:
         """Compute log probabilities for response tokens using cross-entropy loss."""
         if response_length == 0:
             return []
 
         # Convert to tensor
-        input_tensor = torch.tensor([input_ids], device=self.device)
+        input_tensor = torch.tensor([input_ids], device=self.model.device)
 
         with torch.no_grad():
             # Get model outputs
@@ -122,7 +103,7 @@ class HuggingFaceIntrinsicRewardModel(AbstractProcessRewardModel):
             ]  # [response_length, vocab_size]
             response_targets = torch.tensor(
                 input_ids[response_start : response_start + response_length],
-                device=self.device,
+                device=self.model.device,
             )
 
             # Compute cross-entropy loss for each token (reduction='none' gives per-token losses)
@@ -136,14 +117,14 @@ class HuggingFaceIntrinsicRewardModel(AbstractProcessRewardModel):
         return sum(token_log_probs) / len(token_log_probs)
 
     def _compute_tokens_entropy(
-        self, input_ids: list[int], response_start: int, response_length: int
-    ) -> list[float]:
+        self, input_ids: List[int], response_start: int, response_length: int
+    ) -> List[float]:
         """Compute normalized conditional entropy for response tokens - measures model uncertainty."""
         if response_length == 0:
             return []
 
         # Convert to tensor
-        input_tensor = torch.tensor([input_ids], device=self.device)
+        input_tensor = torch.tensor([input_ids], device=self.model.device)
 
         with torch.no_grad():
             # Get model outputs
@@ -210,72 +191,56 @@ class HuggingFaceIntrinsicRewardModel(AbstractProcessRewardModel):
             )
             return 0.0
 
-    async def ascore(
-        self,
-        prompt_or_messages: str | list[ChatMessage] | ChatMessages,
-        response_or_responses: str | list[str],
-    ) -> float | list[float]:
-        """
-        Score response(s) asynchronously using conditional likelihood.
-
-        Args:
-            prompt_or_messages: The prompt or conversation context
-            response_or_responses: The response(s) to evaluate (single string or list of strings)
-
-        Returns:
-            - For single response: float score
-            - For multiple responses: list[float] scores
-        """
-        import asyncio
-
-        # Convert to ChatMessages format
-        chat_messages = ChatMessages.from_prompt_or_messages(prompt_or_messages)
-
-        # Build prompt string from messages
-        prompt = self._build_prompt_from_messages(chat_messages)
-
-        # Handle both single response and batch of responses
-        is_single_response = isinstance(response_or_responses, str)
-        responses = (
-            [response_or_responses] if is_single_response else response_or_responses
-        )
-
-        # Score each response in parallel
-        scores = await asyncio.gather(
-            *[
-                asyncio.to_thread(self._score_single, prompt, response)
-                for response in responses
-            ]
-        )
-
-        # Return single score or list based on input type
-        return scores[0] if is_single_response else list(scores)
+    def _build_prompt_from_messages(self, messages: List[dict]) -> str:
+        """Build a prompt string from OpenAI-style messages."""
+        parts = []
+        for msg in messages:
+            role = msg.get("role", "").capitalize()
+            content = msg.get("content", "")
+            parts.append(f"{role}: {content}")
+        return "\n\n".join(parts)
 
     def score(
         self,
-        prompt_or_messages: str | list[ChatMessage] | ChatMessages,
-        response_or_responses: str | list[str],
-    ) -> float | list[float]:
+        messages: Union[List[List[dict]], List[dict]],
+        responses: Union[str, List[str]] = None,
+    ) -> Union[float, List[float]]:
         """
-        Score response(s) synchronously using conditional likelihood.
+        Score response(s) using conditional likelihood.
 
         Args:
-            prompt_or_messages: The prompt or conversation context
-            response_or_responses: The response(s) to evaluate (single string or list of strings)
+            messages: OpenAI-style messages. Can be:
+                - List[dict]: Single conversation (last message is the response to score)
+                - List[List[dict]]: Multiple conversations (each last message is scored)
+            responses: Optional explicit response(s) to score against the conversation context.
+                If provided, the last message in each conversation is treated as part of the prompt.
 
         Returns:
-            - For single response: float score
-            - For multiple responses: list[float] scores
+            - For single conversation: float score
+            - For multiple conversations: List[float] scores
         """
-        import asyncio
+        # Normalize input to list of conversations
+        if isinstance(messages[0], dict):
+            messages = [messages]
 
-        return asyncio.run(self.ascore(prompt_or_messages, response_or_responses))
+        all_scores = []
 
-    def _build_prompt_from_messages(self, chat_messages: ChatMessages) -> str:
-        """Build a prompt string from ChatMessages."""
-        parts = []
-        for msg in chat_messages.to_chat_messages():
-            role_prefix = f"{msg.role.capitalize()}: "
-            content = msg.extract_text_content()
-            parts.append(f"{role_prefix}{content}")
-        return "\n\n".join(parts)
+        for conv_messages in messages:
+            if responses is None:
+                # Last message is the response to score
+                prompt_messages = conv_messages[:-1]
+                response = conv_messages[-1]['content']
+            else:
+                # All messages are prompt, use provided response
+                prompt_messages = conv_messages
+                response = responses if isinstance(responses, str) else responses[len(all_scores)]
+
+            # Build prompt from all messages except the last
+            prompt = self._build_prompt_from_messages(prompt_messages) if prompt_messages else ""
+
+            # Score this conversation
+            score = self._score_single(prompt, response)
+            all_scores.append(score)
+
+        # Return single score or list based on input
+        return all_scores[0] if len(all_scores) == 1 and isinstance(messages, list) and len(messages) == 1 else all_scores
