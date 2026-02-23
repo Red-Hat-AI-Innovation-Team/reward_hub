@@ -88,6 +88,40 @@ def reset_response_format_fallback_state() -> None:
         _RESPONSE_FORMAT_FALLBACK_COUNT = 0
 
 
+def should_attempt_structured_output(
+    *, structured_output_mode: str, model: str, base_url: Optional[str]
+) -> bool:
+    if structured_output_mode == "off":
+        return False
+
+    if structured_output_mode == "auto" and is_response_format_cached_as_unsupported(
+        model=model,
+        base_url=base_url,
+    ):
+        increment_response_format_fallback_counter()
+        return False
+
+    return True
+
+
+def handle_structured_output_fallback(
+    *,
+    exc: Exception,
+    structured_output_mode: str,
+    model: str,
+    base_url: Optional[str],
+) -> bool:
+    if structured_output_mode != "auto":
+        return False
+
+    if not is_response_format_unsupported_error(exc):
+        return False
+
+    mark_response_format_as_unsupported(model=model, base_url=base_url)
+    increment_response_format_fallback_counter()
+    return True
+
+
 def validate_api_configuration(model: str, **litellm_kwargs):
     """
     Validate that the API configuration is working by making a minimal test call

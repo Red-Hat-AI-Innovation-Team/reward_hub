@@ -9,12 +9,10 @@ from ..base import AbstractOutcomeRewardModel, JudgeResult
 from .prompts import CriterionRegistry, POINTWISE_PROCEDURAL
 from .utils import (
     build_pointwise_response_format,
-    increment_response_format_fallback_counter,
-    is_response_format_unsupported_error,
-    is_response_format_cached_as_unsupported,
-    mark_response_format_as_unsupported,
+    handle_structured_output_fallback,
     normalize_structured_output_mode,
     parse_json_response,
+    should_attempt_structured_output,
     validate_api_configuration,
     validate_pointwise_judge_result,
     with_retry,
@@ -147,35 +145,28 @@ class PointwiseJudgeModel(AbstractOutcomeRewardModel):
             {"role": "user", "content": f"Evaluate this conversation: {messages}"},
         ]
 
-        if self.structured_output_mode != "off":
-            if (
-                self.structured_output_mode == "auto"
-                and is_response_format_cached_as_unsupported(
+        if should_attempt_structured_output(
+            structured_output_mode=self.structured_output_mode,
+            model=self.model,
+            base_url=self._cache_base_url,
+        ):
+            request_kwargs = self._completion_request(
+                judge_messages=judge_messages,
+                use_response_format=True,
+                **kwargs,
+            )
+            try:
+                response = litellm.completion(**request_kwargs)
+                result = parse_json_response(response.choices[0].message.content)
+                return validate_pointwise_judge_result(result)
+            except Exception as exc:
+                if not handle_structured_output_fallback(
+                    exc=exc,
+                    structured_output_mode=self.structured_output_mode,
                     model=self.model,
                     base_url=self._cache_base_url,
-                )
-            ):
-                increment_response_format_fallback_counter()
-            else:
-                request_kwargs = self._completion_request(
-                    judge_messages=judge_messages,
-                    use_response_format=True,
-                    **kwargs,
-                )
-                try:
-                    response = litellm.completion(**request_kwargs)
-                    result = parse_json_response(response.choices[0].message.content)
-                    return validate_pointwise_judge_result(result)
-                except Exception as exc:
-                    if not (
-                        self.structured_output_mode == "auto"
-                        and is_response_format_unsupported_error(exc)
-                    ):
-                        raise
-                    mark_response_format_as_unsupported(
-                        model=self.model, base_url=self._cache_base_url
-                    )
-                    increment_response_format_fallback_counter()
+                ):
+                    raise
 
         fallback_kwargs = self._completion_request(
             judge_messages=judge_messages,
@@ -245,35 +236,28 @@ class PointwiseJudgeModel(AbstractOutcomeRewardModel):
             },
         ]
 
-        if self.structured_output_mode != "off":
-            if (
-                self.structured_output_mode == "auto"
-                and is_response_format_cached_as_unsupported(
+        if should_attempt_structured_output(
+            structured_output_mode=self.structured_output_mode,
+            model=self.model,
+            base_url=self._cache_base_url,
+        ):
+            request_kwargs = self._completion_request(
+                judge_messages=judge_messages,
+                use_response_format=True,
+                **kwargs,
+            )
+            try:
+                response = await litellm.acompletion(**request_kwargs)
+                result = parse_json_response(response.choices[0].message.content)
+                return validate_pointwise_judge_result(result)
+            except Exception as exc:
+                if not handle_structured_output_fallback(
+                    exc=exc,
+                    structured_output_mode=self.structured_output_mode,
                     model=self.model,
                     base_url=self._cache_base_url,
-                )
-            ):
-                increment_response_format_fallback_counter()
-            else:
-                request_kwargs = self._completion_request(
-                    judge_messages=judge_messages,
-                    use_response_format=True,
-                    **kwargs,
-                )
-                try:
-                    response = await litellm.acompletion(**request_kwargs)
-                    result = parse_json_response(response.choices[0].message.content)
-                    return validate_pointwise_judge_result(result)
-                except Exception as exc:
-                    if not (
-                        self.structured_output_mode == "auto"
-                        and is_response_format_unsupported_error(exc)
-                    ):
-                        raise
-                    mark_response_format_as_unsupported(
-                        model=self.model, base_url=self._cache_base_url
-                    )
-                    increment_response_format_fallback_counter()
+                ):
+                    raise
 
         fallback_kwargs = self._completion_request(
             judge_messages=judge_messages,

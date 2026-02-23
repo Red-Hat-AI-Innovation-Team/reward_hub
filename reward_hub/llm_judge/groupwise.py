@@ -9,12 +9,10 @@ from .prompts import CriterionRegistry, GROUPWISE_PROCEDURAL
 from .utils import (
     build_groupwise_response_format,
     extract_message_content,
-    increment_response_format_fallback_counter,
-    is_response_format_unsupported_error,
-    is_response_format_cached_as_unsupported,
-    mark_response_format_as_unsupported,
+    handle_structured_output_fallback,
     normalize_structured_output_mode,
     parse_json_response,
+    should_attempt_structured_output,
     validate_api_configuration,
     validate_groupwise_judge_result,
     with_retry,
@@ -194,46 +192,39 @@ class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
             },
         ]
 
-        if self.structured_output_mode != "off":
-            if (
-                self.structured_output_mode == "auto"
-                and is_response_format_cached_as_unsupported(
-                    model=self.model,
-                    base_url=self._cache_base_url,
-                )
-            ):
-                increment_response_format_fallback_counter()
-            else:
-                request_kwargs = self._completion_request(
-                    judge_messages=judge_messages,
+        if should_attempt_structured_output(
+            structured_output_mode=self.structured_output_mode,
+            model=self.model,
+            base_url=self._cache_base_url,
+        ):
+            request_kwargs = self._completion_request(
+                judge_messages=judge_messages,
+                num_responses=len(conversations),
+                top_n=top_n,
+                use_response_format=True,
+                **kwargs,
+            )
+            try:
+                response = litellm.completion(**request_kwargs)
+                result = parse_json_response(response.choices[0].message.content)
+                selected_indices, reasoning = validate_groupwise_judge_result(
+                    result,
                     num_responses=len(conversations),
                     top_n=top_n,
-                    use_response_format=True,
-                    **kwargs,
                 )
-                try:
-                    response = litellm.completion(**request_kwargs)
-                    result = parse_json_response(response.choices[0].message.content)
-                    selected_indices, reasoning = validate_groupwise_judge_result(
-                        result,
-                        num_responses=len(conversations),
-                        top_n=top_n,
-                    )
-                except Exception as exc:
-                    if not (
-                        self.structured_output_mode == "auto"
-                        and is_response_format_unsupported_error(exc)
-                    ):
-                        raise
-                    mark_response_format_as_unsupported(
-                        model=self.model, base_url=self._cache_base_url
-                    )
-                    increment_response_format_fallback_counter()
-                else:
-                    scores = [0.0] * len(conversations)
-                    for idx in selected_indices:
-                        scores[idx] = 1.0
-                    return scores, reasoning
+            except Exception as exc:
+                if not handle_structured_output_fallback(
+                    exc=exc,
+                    structured_output_mode=self.structured_output_mode,
+                    model=self.model,
+                    base_url=self._cache_base_url,
+                ):
+                    raise
+            else:
+                scores = [0.0] * len(conversations)
+                for idx in selected_indices:
+                    scores[idx] = 1.0
+                return scores, reasoning
 
         fallback_kwargs = self._completion_request(
             judge_messages=judge_messages,
@@ -340,46 +331,39 @@ class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
             },
         ]
 
-        if self.structured_output_mode != "off":
-            if (
-                self.structured_output_mode == "auto"
-                and is_response_format_cached_as_unsupported(
-                    model=self.model,
-                    base_url=self._cache_base_url,
-                )
-            ):
-                increment_response_format_fallback_counter()
-            else:
-                request_kwargs = self._completion_request(
-                    judge_messages=judge_messages,
+        if should_attempt_structured_output(
+            structured_output_mode=self.structured_output_mode,
+            model=self.model,
+            base_url=self._cache_base_url,
+        ):
+            request_kwargs = self._completion_request(
+                judge_messages=judge_messages,
+                num_responses=len(conversations),
+                top_n=top_n,
+                use_response_format=True,
+                **kwargs,
+            )
+            try:
+                response = await litellm.acompletion(**request_kwargs)
+                result = parse_json_response(response.choices[0].message.content)
+                selected_indices, reasoning = validate_groupwise_judge_result(
+                    result,
                     num_responses=len(conversations),
                     top_n=top_n,
-                    use_response_format=True,
-                    **kwargs,
                 )
-                try:
-                    response = await litellm.acompletion(**request_kwargs)
-                    result = parse_json_response(response.choices[0].message.content)
-                    selected_indices, reasoning = validate_groupwise_judge_result(
-                        result,
-                        num_responses=len(conversations),
-                        top_n=top_n,
-                    )
-                except Exception as exc:
-                    if not (
-                        self.structured_output_mode == "auto"
-                        and is_response_format_unsupported_error(exc)
-                    ):
-                        raise
-                    mark_response_format_as_unsupported(
-                        model=self.model, base_url=self._cache_base_url
-                    )
-                    increment_response_format_fallback_counter()
-                else:
-                    scores = [0.0] * len(conversations)
-                    for idx in selected_indices:
-                        scores[idx] = 1.0
-                    return scores, reasoning
+            except Exception as exc:
+                if not handle_structured_output_fallback(
+                    exc=exc,
+                    structured_output_mode=self.structured_output_mode,
+                    model=self.model,
+                    base_url=self._cache_base_url,
+                ):
+                    raise
+            else:
+                scores = [0.0] * len(conversations)
+                for idx in selected_indices:
+                    scores[idx] = 1.0
+                return scores, reasoning
 
         fallback_kwargs = self._completion_request(
             judge_messages=judge_messages,
