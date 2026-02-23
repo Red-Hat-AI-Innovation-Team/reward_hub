@@ -155,3 +155,31 @@ class TestGroupwiseStructuredOutput:
 
                 with pytest.raises(ValueError, match="selected_indices"):
                     judge.score(conversations, top_n=2)
+
+    def test_groupwise_schema_avoids_unique_items_keyword(self):
+        with patch("reward_hub.llm_judge.groupwise.validate_api_configuration"):
+            with patch("litellm.completion") as mock_completion:
+                mock_completion.return_value = _mock_completion_response('{"selected_indices": [0], "reasoning": "ok"}')
+
+                judge = create_groupwise_judge(
+                    model="gpt-4o-mini",
+                    criterion="overall_quality",
+                    api_key="test-key",
+                    structured_output_mode="auto",
+                )
+
+                conversations = [
+                    [
+                        {"role": "user", "content": "Question"},
+                        {"role": "assistant", "content": "Response A"},
+                    ],
+                    [
+                        {"role": "user", "content": "Question"},
+                        {"role": "assistant", "content": "Response B"},
+                    ],
+                ]
+                judge.score(conversations, top_n=1)
+
+                schema = mock_completion.call_args.kwargs["response_format"]["json_schema"]["schema"]
+                selected_indices = schema["properties"]["selected_indices"]
+                assert "uniqueItems" not in selected_indices
