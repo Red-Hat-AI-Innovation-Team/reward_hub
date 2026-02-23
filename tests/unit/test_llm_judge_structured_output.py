@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
 """Tests for structured output mode in LLM judges."""
 
+import logging
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from reward_hub.llm_judge import create_groupwise_judge, create_pointwise_judge
+from reward_hub.llm_judge import (
+    create_groupwise_judge,
+    create_pointwise_judge,
+    get_structured_output_fallback_stats,
+    log_structured_output_fallback_stats,
+)
 from reward_hub.llm_judge.utils import (
     get_response_format_fallback_counter,
     get_response_format_fallback_counter_display,
@@ -118,6 +124,37 @@ class TestPointwiseStructuredOutput:
 
                 with pytest.raises(ValueError, match="response_format not supported"):
                     judge.score(conversation)
+
+    def test_auto_mode_does_not_fallback_on_unrelated_error(self):
+        with patch("reward_hub.llm_judge.pointwise.validate_api_configuration"):
+            with patch("litellm.completion") as mock_completion:
+                mock_completion.side_effect = RuntimeError("rate limit exceeded")
+
+                judge = create_pointwise_judge(
+                    model="gpt-4o-mini",
+                    criterion="overall_quality",
+                    api_key="test-key",
+                    structured_output_mode="auto",
+                )
+
+                conversation = [
+                    {"role": "user", "content": "Test question"},
+                    {"role": "assistant", "content": "Test answer"},
+                ]
+
+                with pytest.raises(RuntimeError, match="rate limit exceeded"):
+                    judge.score(conversation)
+
+                assert mock_completion.call_count == 3
+                assert all(
+                    call.kwargs.get("response_format") is not None
+                    for call in mock_completion.call_args_list
+                )
+                assert get_response_format_fallback_counter() == 0
+                assert not is_response_format_cached_as_unsupported(
+                    model="gpt-4o-mini",
+                    base_url=None,
+                )
 
     def test_auto_mode_uses_cached_unsupported_response_format_on_subsequent_calls(
         self,
@@ -356,4 +393,27 @@ class TestStructuredOutputFallbackState:
         )
         assert is_response_format_cached_as_unsupported(
             model="model-299", base_url=None
+        )
+
+    def test_structured_output_fallback_stats_reports_counter_and_cache(self):
+        mark_response_format_as_unsupported(model="gpt-4o-mini", base_url=None)
+        increment_response_format_fallback_counter()
+
+        stats = get_structured_output_fallback_stats()
+        assert stats["fallback_count"] == 1
+        assert stats["fallback_count_display"] == "1"
+        assert stats["unsupported_cache_size"] == 1
+        assert stats["unsupported_cache_maxsize"] == 256
+
+    def test_structured_output_fallback_stats_can_be_logged(self, caplog):
+        mark_response_format_as_unsupported(model="gpt-4o-mini", base_url=None)
+        increment_response_format_fallback_counter()
+
+        with caplog.at_level(logging.INFO, logger="reward_hub.llm_judge.utils"):
+            log_structured_output_fallback_stats()
+
+        assert any(
+            "fallback_count=1" in record.message
+            and "unsupported_cache_size=1" in record.message
+            for record in caplog.records
         )

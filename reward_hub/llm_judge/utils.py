@@ -4,6 +4,7 @@ from collections import OrderedDict
 import functools
 import inspect
 import json
+import logging
 from threading import Lock
 from typing import Any, Callable, Optional, TypeVar
 
@@ -16,6 +17,7 @@ from tenacity import (
 )
 
 T = TypeVar("T")
+_LOGGER = logging.getLogger(__name__)
 
 _RESPONSE_FORMAT_UNSUPPORTED_CACHE_MAXSIZE = 256
 _RESPONSE_FORMAT_UNSUPPORTED_CACHE: OrderedDict[tuple[str, str], bool] = OrderedDict()
@@ -79,6 +81,31 @@ def get_response_format_fallback_counter_display() -> str:
     if count >= _RESPONSE_FORMAT_FALLBACK_COUNTER_MAX:
         return f"{_RESPONSE_FORMAT_FALLBACK_COUNTER_MAX}+"
     return str(count)
+
+
+def get_response_format_unsupported_cache_size() -> int:
+    with _RESPONSE_FORMAT_UNSUPPORTED_CACHE_LOCK:
+        return len(_RESPONSE_FORMAT_UNSUPPORTED_CACHE)
+
+
+def get_structured_output_fallback_stats() -> dict[str, int | str]:
+    return {
+        "fallback_count": get_response_format_fallback_counter(),
+        "fallback_count_display": get_response_format_fallback_counter_display(),
+        "unsupported_cache_size": get_response_format_unsupported_cache_size(),
+        "unsupported_cache_maxsize": _RESPONSE_FORMAT_UNSUPPORTED_CACHE_MAXSIZE,
+    }
+
+
+def log_structured_output_fallback_stats() -> None:
+    stats = get_structured_output_fallback_stats()
+    _LOGGER.info(
+        "llm_judge structured_output fallback_count=%s fallback_count_display=%s unsupported_cache_size=%s unsupported_cache_maxsize=%s",
+        stats["fallback_count"],
+        stats["fallback_count_display"],
+        stats["unsupported_cache_size"],
+        stats["unsupported_cache_maxsize"],
+    )
 
 
 def reset_response_format_fallback_state() -> None:
