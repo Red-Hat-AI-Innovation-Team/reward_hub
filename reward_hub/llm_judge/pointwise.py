@@ -9,7 +9,10 @@ from ..base import AbstractOutcomeRewardModel, JudgeResult
 from .prompts import CriterionRegistry, POINTWISE_PROCEDURAL
 from .utils import (
     build_pointwise_response_format,
+    increment_response_format_fallback_counter,
     is_response_format_unsupported_error,
+    is_response_format_cached_as_unsupported,
+    mark_response_format_as_unsupported,
     normalize_structured_output_mode,
     parse_json_response,
     validate_api_configuration,
@@ -53,8 +56,14 @@ class PointwiseJudgeModel(AbstractOutcomeRewardModel):
         self.base_url = base_url
         self.temperature = temperature
         self.max_tokens = max_tokens
-        self.structured_output_mode = normalize_structured_output_mode(structured_output_mode)
+        self.structured_output_mode = normalize_structured_output_mode(
+            structured_output_mode
+        )
         self.litellm_kwargs = litellm_kwargs
+        self._cache_base_url = base_url
+        if self._cache_base_url is None:
+            api_base = self.litellm_kwargs.get("api_base")
+            self._cache_base_url = str(api_base) if api_base is not None else None
 
         # Compose full prompt by inserting criterion into procedural template
         criterion_text = CriterionRegistry.get(criterion)
@@ -69,7 +78,9 @@ class PointwiseJudgeModel(AbstractOutcomeRewardModel):
         # Validate API key works by making a test call
         validate_api_configuration(self.model, **self.litellm_kwargs)
 
-    def _completion_request(self, *, judge_messages: List[dict], use_response_format: bool, **kwargs) -> dict:
+    def _completion_request(
+        self, *, judge_messages: List[dict], use_response_format: bool, **kwargs
+    ) -> dict:
         request_kwargs = {
             "model": self.model,
             "messages": judge_messages,
@@ -83,7 +94,10 @@ class PointwiseJudgeModel(AbstractOutcomeRewardModel):
         return request_kwargs
 
     def score(
-        self, messages: Union[List[List[dict]], List[dict]], return_judge_reasoning: bool = False, **kwargs
+        self,
+        messages: Union[List[List[dict]], List[dict]],
+        return_judge_reasoning: bool = False,
+        **kwargs,
     ) -> Union[List[float], float, JudgeResult]:
         """
         Score conversations using the OpenAI chat completion format
@@ -134,18 +148,34 @@ class PointwiseJudgeModel(AbstractOutcomeRewardModel):
         ]
 
         if self.structured_output_mode != "off":
-            request_kwargs = self._completion_request(
-                judge_messages=judge_messages,
-                use_response_format=True,
-                **kwargs,
-            )
-            try:
-                response = litellm.completion(**request_kwargs)
-                result = parse_json_response(response.choices[0].message.content)
-                return validate_pointwise_judge_result(result)
-            except Exception as exc:
-                if not (self.structured_output_mode == "auto" and is_response_format_unsupported_error(exc)):
-                    raise
+            if (
+                self.structured_output_mode == "auto"
+                and is_response_format_cached_as_unsupported(
+                    model=self.model,
+                    base_url=self._cache_base_url,
+                )
+            ):
+                increment_response_format_fallback_counter()
+            else:
+                request_kwargs = self._completion_request(
+                    judge_messages=judge_messages,
+                    use_response_format=True,
+                    **kwargs,
+                )
+                try:
+                    response = litellm.completion(**request_kwargs)
+                    result = parse_json_response(response.choices[0].message.content)
+                    return validate_pointwise_judge_result(result)
+                except Exception as exc:
+                    if not (
+                        self.structured_output_mode == "auto"
+                        and is_response_format_unsupported_error(exc)
+                    ):
+                        raise
+                    mark_response_format_as_unsupported(
+                        model=self.model, base_url=self._cache_base_url
+                    )
+                    increment_response_format_fallback_counter()
 
         fallback_kwargs = self._completion_request(
             judge_messages=judge_messages,
@@ -157,7 +187,10 @@ class PointwiseJudgeModel(AbstractOutcomeRewardModel):
         return validate_pointwise_judge_result(result)
 
     async def ascore(
-        self, messages: Union[List[List[dict]], List[dict]], return_judge_reasoning: bool = False, **kwargs
+        self,
+        messages: Union[List[List[dict]], List[dict]],
+        return_judge_reasoning: bool = False,
+        **kwargs,
     ) -> Union[List[float], float, JudgeResult]:
         """
         Async version of score
@@ -183,7 +216,9 @@ class PointwiseJudgeModel(AbstractOutcomeRewardModel):
             return score
         else:
             # Multiple conversations: List[List[dict]]
-            results = await asyncio.gather(*[self._ascore_single(conv, **kwargs) for conv in messages])
+            results = await asyncio.gather(
+                *[self._ascore_single(conv, **kwargs) for conv in messages]
+            )
             scores = [r[0] for r in results]
             reasonings = [r[1] for r in results]
             if return_judge_reasoning:
@@ -204,22 +239,41 @@ class PointwiseJudgeModel(AbstractOutcomeRewardModel):
         """
         judge_messages = [
             {"role": "system", "content": self.full_prompt},
-            {"role": "user", "content": f"Evaluate the last assistant message given the context: {messages}"},
+            {
+                "role": "user",
+                "content": f"Evaluate the last assistant message given the context: {messages}",
+            },
         ]
 
         if self.structured_output_mode != "off":
-            request_kwargs = self._completion_request(
-                judge_messages=judge_messages,
-                use_response_format=True,
-                **kwargs,
-            )
-            try:
-                response = await litellm.acompletion(**request_kwargs)
-                result = parse_json_response(response.choices[0].message.content)
-                return validate_pointwise_judge_result(result)
-            except Exception as exc:
-                if not (self.structured_output_mode == "auto" and is_response_format_unsupported_error(exc)):
-                    raise
+            if (
+                self.structured_output_mode == "auto"
+                and is_response_format_cached_as_unsupported(
+                    model=self.model,
+                    base_url=self._cache_base_url,
+                )
+            ):
+                increment_response_format_fallback_counter()
+            else:
+                request_kwargs = self._completion_request(
+                    judge_messages=judge_messages,
+                    use_response_format=True,
+                    **kwargs,
+                )
+                try:
+                    response = await litellm.acompletion(**request_kwargs)
+                    result = parse_json_response(response.choices[0].message.content)
+                    return validate_pointwise_judge_result(result)
+                except Exception as exc:
+                    if not (
+                        self.structured_output_mode == "auto"
+                        and is_response_format_unsupported_error(exc)
+                    ):
+                        raise
+                    mark_response_format_as_unsupported(
+                        model=self.model, base_url=self._cache_base_url
+                    )
+                    increment_response_format_fallback_counter()
 
         fallback_kwargs = self._completion_request(
             judge_messages=judge_messages,

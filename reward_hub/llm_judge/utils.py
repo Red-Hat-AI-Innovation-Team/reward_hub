@@ -1,14 +1,91 @@
 """Utility functions for LLM Judge implementations"""
 
+from collections import OrderedDict
 import functools
 import inspect
 import json
-from typing import Any, Callable, TypeVar
+from threading import Lock
+from typing import Any, Callable, Optional, TypeVar
 
 import litellm
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 T = TypeVar("T")
+
+_RESPONSE_FORMAT_UNSUPPORTED_CACHE_MAXSIZE = 256
+_RESPONSE_FORMAT_UNSUPPORTED_CACHE: OrderedDict[tuple[str, str], bool] = OrderedDict()
+_RESPONSE_FORMAT_UNSUPPORTED_CACHE_LOCK = Lock()
+
+_RESPONSE_FORMAT_FALLBACK_COUNTER_MAX = 99999
+_RESPONSE_FORMAT_FALLBACK_COUNT = 0
+_RESPONSE_FORMAT_FALLBACK_COUNT_LOCK = Lock()
+
+
+def _response_format_cache_key(
+    *, model: str, base_url: Optional[str]
+) -> tuple[str, str]:
+    return model.strip().lower(), (base_url or "").strip().lower()
+
+
+def is_response_format_cached_as_unsupported(
+    *, model: str, base_url: Optional[str]
+) -> bool:
+    key = _response_format_cache_key(model=model, base_url=base_url)
+    with _RESPONSE_FORMAT_UNSUPPORTED_CACHE_LOCK:
+        if key not in _RESPONSE_FORMAT_UNSUPPORTED_CACHE:
+            return False
+        _RESPONSE_FORMAT_UNSUPPORTED_CACHE.move_to_end(key)
+        return _RESPONSE_FORMAT_UNSUPPORTED_CACHE[key]
+
+
+def mark_response_format_as_unsupported(*, model: str, base_url: Optional[str]) -> None:
+    key = _response_format_cache_key(model=model, base_url=base_url)
+    with _RESPONSE_FORMAT_UNSUPPORTED_CACHE_LOCK:
+        _RESPONSE_FORMAT_UNSUPPORTED_CACHE[key] = True
+        _RESPONSE_FORMAT_UNSUPPORTED_CACHE.move_to_end(key)
+        while (
+            len(_RESPONSE_FORMAT_UNSUPPORTED_CACHE)
+            > _RESPONSE_FORMAT_UNSUPPORTED_CACHE_MAXSIZE
+        ):
+            _RESPONSE_FORMAT_UNSUPPORTED_CACHE.popitem(last=False)
+
+
+def clear_response_format_unsupported_cache() -> None:
+    with _RESPONSE_FORMAT_UNSUPPORTED_CACHE_LOCK:
+        _RESPONSE_FORMAT_UNSUPPORTED_CACHE.clear()
+
+
+def increment_response_format_fallback_counter() -> None:
+    global _RESPONSE_FORMAT_FALLBACK_COUNT
+    with _RESPONSE_FORMAT_FALLBACK_COUNT_LOCK:
+        _RESPONSE_FORMAT_FALLBACK_COUNT = min(
+            _RESPONSE_FORMAT_FALLBACK_COUNT + 1,
+            _RESPONSE_FORMAT_FALLBACK_COUNTER_MAX,
+        )
+
+
+def get_response_format_fallback_counter() -> int:
+    with _RESPONSE_FORMAT_FALLBACK_COUNT_LOCK:
+        return _RESPONSE_FORMAT_FALLBACK_COUNT
+
+
+def get_response_format_fallback_counter_display() -> str:
+    count = get_response_format_fallback_counter()
+    if count >= _RESPONSE_FORMAT_FALLBACK_COUNTER_MAX:
+        return f"{_RESPONSE_FORMAT_FALLBACK_COUNTER_MAX}+"
+    return str(count)
+
+
+def reset_response_format_fallback_state() -> None:
+    global _RESPONSE_FORMAT_FALLBACK_COUNT
+    clear_response_format_unsupported_cache()
+    with _RESPONSE_FORMAT_FALLBACK_COUNT_LOCK:
+        _RESPONSE_FORMAT_FALLBACK_COUNT = 0
 
 
 def validate_api_configuration(model: str, **litellm_kwargs):
@@ -31,18 +108,28 @@ def validate_api_configuration(model: str, **litellm_kwargs):
         ]
 
         response = litellm.completion(
-            model=model, messages=test_messages, max_tokens=5, temperature=0.0, **litellm_kwargs
+            model=model,
+            messages=test_messages,
+            max_tokens=5,
+            temperature=0.0,
+            **litellm_kwargs,
         )
 
         # If we get here, the API configuration is working
         if not response or not response.choices:
-            raise ValueError(f"Invalid response from {model} - API configuration may be incorrect")
+            raise ValueError(
+                f"Invalid response from {model} - API configuration may be incorrect"
+            )
 
     except Exception as e:
         # Parse different types of authentication/configuration errors
         error_msg = str(e).lower()
 
-        if "authentication" in error_msg or "api key" in error_msg or "unauthorized" in error_msg:
+        if (
+            "authentication" in error_msg
+            or "api key" in error_msg
+            or "unauthorized" in error_msg
+        ):
             raise ValueError(
                 f"API key authentication failed for model '{model}'. "
                 f"Please check your API key is valid and has the correct permissions. "
@@ -58,7 +145,11 @@ def validate_api_configuration(model: str, **litellm_kwargs):
             raise ValueError(
                 f"Rate limit or quota exceeded for model '{model}'. Please check your API usage limits. Error: {str(e)}"
             ) from e
-        elif "connection" in error_msg or "network" in error_msg or "timeout" in error_msg:
+        elif (
+            "connection" in error_msg
+            or "network" in error_msg
+            or "timeout" in error_msg
+        ):
             raise ConnectionError(
                 f"Failed to connect to API endpoint for model '{model}'. "
                 f"Please check your internet connection and base_url if using custom endpoint. "
@@ -90,7 +181,9 @@ def parse_json_response(response_text: str) -> dict:
 def normalize_structured_output_mode(mode: str) -> str:
     normalized = mode.strip().lower()
     if normalized not in {"auto", "strict", "off"}:
-        raise ValueError(f"Invalid structured_output_mode '{mode}'. Must be one of: auto, strict, off")
+        raise ValueError(
+            f"Invalid structured_output_mode '{mode}'. Must be one of: auto, strict, off"
+        )
     return normalized
 
 
@@ -113,7 +206,9 @@ def build_pointwise_response_format() -> dict[str, Any]:
     }
 
 
-def build_groupwise_response_format(*, num_responses: int, top_n: int) -> dict[str, Any]:
+def build_groupwise_response_format(
+    *, num_responses: int, top_n: int
+) -> dict[str, Any]:
     return {
         "type": "json_schema",
         "json_schema": {
@@ -157,16 +252,22 @@ def validate_pointwise_judge_result(result: dict[str, Any]) -> tuple[float, str]
     return score_value, result["reasoning"]
 
 
-def validate_groupwise_judge_result(result: dict[str, Any], *, num_responses: int, top_n: int) -> tuple[list[int], str]:
+def validate_groupwise_judge_result(
+    result: dict[str, Any], *, num_responses: int, top_n: int
+) -> tuple[list[int], str]:
     if not isinstance(result.get("reasoning"), str):
         raise ValueError("groupwise judge response must include string 'reasoning'")
 
     selected_indices = result.get("selected_indices")
     if not isinstance(selected_indices, list):
-        raise ValueError("groupwise judge response must include list 'selected_indices'")
+        raise ValueError(
+            "groupwise judge response must include list 'selected_indices'"
+        )
 
     if len(selected_indices) != top_n:
-        raise ValueError(f"groupwise judge response 'selected_indices' must contain exactly {top_n} indices")
+        raise ValueError(
+            f"groupwise judge response 'selected_indices' must contain exactly {top_n} indices"
+        )
 
     if len(set(selected_indices)) != len(selected_indices):
         raise ValueError("groupwise judge response 'selected_indices' must be unique")
@@ -174,9 +275,13 @@ def validate_groupwise_judge_result(result: dict[str, Any], *, num_responses: in
     normalized_indices: list[int] = []
     for index in selected_indices:
         if not isinstance(index, int):
-            raise ValueError("groupwise judge response 'selected_indices' must contain integers")
+            raise ValueError(
+                "groupwise judge response 'selected_indices' must contain integers"
+            )
         if index < 0 or index >= num_responses:
-            raise ValueError("groupwise judge response 'selected_indices' contains out-of-range index")
+            raise ValueError(
+                "groupwise judge response 'selected_indices' contains out-of-range index"
+            )
         normalized_indices.append(index)
 
     return normalized_indices, result["reasoning"]
