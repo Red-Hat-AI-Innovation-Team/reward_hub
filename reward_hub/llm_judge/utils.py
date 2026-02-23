@@ -133,7 +133,6 @@ def build_groupwise_response_format(*, num_responses: int, top_n: int) -> dict[s
                         },
                         "minItems": top_n,
                         "maxItems": top_n,
-                        "uniqueItems": True,
                     },
                 },
                 "required": ["reasoning", "selected_indices"],
