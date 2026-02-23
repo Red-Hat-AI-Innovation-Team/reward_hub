@@ -1,11 +1,21 @@
-"""Pointwise judge implementation using LiteLLM"""
+"""Pointwise judge implementation using LiteLLM."""
 
-import litellm
 import asyncio
 from typing import List, Optional, Union
+
+import litellm
+
 from ..base import AbstractOutcomeRewardModel, JudgeResult
 from .prompts import CriterionRegistry, POINTWISE_PROCEDURAL
-from .utils import validate_api_configuration, parse_json_response, with_retry
+from .utils import (
+    build_pointwise_response_format,
+    is_response_format_unsupported_error,
+    normalize_structured_output_mode,
+    parse_json_response,
+    validate_api_configuration,
+    validate_pointwise_judge_result,
+    with_retry,
+)
 
 
 class PointwiseJudgeModel(AbstractOutcomeRewardModel):
@@ -13,15 +23,18 @@ class PointwiseJudgeModel(AbstractOutcomeRewardModel):
     Pointwise judge that scores individual conversations on a 0-10 scale.
     Uses LiteLLM for model calls with built-in retry and provider support.
     """
-    
-    def __init__(self,
-                 model: str,
-                 criterion: str,
-                 api_key: Optional[str] = None,
-                 base_url: Optional[str] = None,
-                 temperature: float = 0.0,
-                 max_tokens: int = 512,
-                 **litellm_kwargs):
+
+    def __init__(
+        self,
+        model: str,
+        criterion: str,
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+        temperature: float = 0.0,
+        max_tokens: int = 512,
+        structured_output_mode: str = "auto",
+        **litellm_kwargs,
+    ):
         """
         Initialize pointwise judge
 
@@ -40,6 +53,7 @@ class PointwiseJudgeModel(AbstractOutcomeRewardModel):
         self.base_url = base_url
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.structured_output_mode = normalize_structured_output_mode(structured_output_mode)
         self.litellm_kwargs = litellm_kwargs
 
         # Compose full prompt by inserting criterion into procedural template
@@ -54,8 +68,23 @@ class PointwiseJudgeModel(AbstractOutcomeRewardModel):
 
         # Validate API key works by making a test call
         validate_api_configuration(self.model, **self.litellm_kwargs)
-    
-    def score(self, messages: Union[List[List[dict]], List[dict]], return_judge_reasoning: bool = False, **kwargs) -> Union[List[float], float, JudgeResult]:
+
+    def _completion_request(self, *, judge_messages: List[dict], use_response_format: bool, **kwargs) -> dict:
+        request_kwargs = {
+            "model": self.model,
+            "messages": judge_messages,
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            **self.litellm_kwargs,
+            **kwargs,
+        }
+        if use_response_format:
+            request_kwargs["response_format"] = build_pointwise_response_format()
+        return request_kwargs
+
+    def score(
+        self, messages: Union[List[List[dict]], List[dict]], return_judge_reasoning: bool = False, **kwargs
+    ) -> Union[List[float], float, JudgeResult]:
         """
         Score conversations using the OpenAI chat completion format
 
@@ -86,7 +115,7 @@ class PointwiseJudgeModel(AbstractOutcomeRewardModel):
             if return_judge_reasoning:
                 return JudgeResult(scores=scores, reasonings=reasonings)
             return scores
-    
+
     @with_retry(max_attempts=3, min_wait=0.1, max_wait=10.0)
     def _score_single(self, messages: List[dict], **kwargs) -> tuple[float, str]:
         """
@@ -101,24 +130,35 @@ class PointwiseJudgeModel(AbstractOutcomeRewardModel):
         """
         judge_messages = [
             {"role": "system", "content": self.full_prompt},
-            {"role": "user", "content": f"Evaluate this conversation: {messages}"}
+            {"role": "user", "content": f"Evaluate this conversation: {messages}"},
         ]
 
-        response = litellm.completion(
-            model=self.model,
-            messages=judge_messages,
-            temperature=self.temperature,
-            max_tokens=self.max_tokens,
-            **self.litellm_kwargs,
-            **kwargs
-        )
+        if self.structured_output_mode != "off":
+            request_kwargs = self._completion_request(
+                judge_messages=judge_messages,
+                use_response_format=True,
+                **kwargs,
+            )
+            try:
+                response = litellm.completion(**request_kwargs)
+                result = parse_json_response(response.choices[0].message.content)
+                return validate_pointwise_judge_result(result)
+            except Exception as exc:
+                if not (self.structured_output_mode == "auto" and is_response_format_unsupported_error(exc)):
+                    raise
 
-        response_text = response.choices[0].message.content
-        # Parse numeric score from JSON response
-        result = parse_json_response(response_text)
-        return float(result["score"]), result["reasoning"]
-    
-    async def ascore(self, messages: Union[List[List[dict]], List[dict]], return_judge_reasoning: bool = False, **kwargs) -> Union[List[float], float, JudgeResult]:
+        fallback_kwargs = self._completion_request(
+            judge_messages=judge_messages,
+            use_response_format=False,
+            **kwargs,
+        )
+        response = litellm.completion(**fallback_kwargs)
+        result = parse_json_response(response.choices[0].message.content)
+        return validate_pointwise_judge_result(result)
+
+    async def ascore(
+        self, messages: Union[List[List[dict]], List[dict]], return_judge_reasoning: bool = False, **kwargs
+    ) -> Union[List[float], float, JudgeResult]:
         """
         Async version of score
 
@@ -149,7 +189,7 @@ class PointwiseJudgeModel(AbstractOutcomeRewardModel):
             if return_judge_reasoning:
                 return JudgeResult(scores=scores, reasonings=reasonings)
             return scores
-    
+
     @with_retry(max_attempts=3, min_wait=0.1, max_wait=10.0)
     async def _ascore_single(self, messages: List[dict], **kwargs) -> tuple[float, str]:
         """
@@ -164,21 +204,28 @@ class PointwiseJudgeModel(AbstractOutcomeRewardModel):
         """
         judge_messages = [
             {"role": "system", "content": self.full_prompt},
-            {"role": "user", "content": f"Evaluate the last assistant message given the context: {messages}"}
+            {"role": "user", "content": f"Evaluate the last assistant message given the context: {messages}"},
         ]
 
-        response = await litellm.acompletion(
-            model=self.model,
-            messages=judge_messages,
-            temperature=self.temperature,
-            max_tokens=self.max_tokens,
-            **self.litellm_kwargs,
-            **kwargs
-        )
+        if self.structured_output_mode != "off":
+            request_kwargs = self._completion_request(
+                judge_messages=judge_messages,
+                use_response_format=True,
+                **kwargs,
+            )
+            try:
+                response = await litellm.acompletion(**request_kwargs)
+                result = parse_json_response(response.choices[0].message.content)
+                return validate_pointwise_judge_result(result)
+            except Exception as exc:
+                if not (self.structured_output_mode == "auto" and is_response_format_unsupported_error(exc)):
+                    raise
 
-        response_text = response.choices[0].message.content
-        # Parse numeric score from JSON response
-        result = parse_json_response(response_text)
-        return float(result["score"]), result["reasoning"]
-    
-    
+        fallback_kwargs = self._completion_request(
+            judge_messages=judge_messages,
+            use_response_format=False,
+            **kwargs,
+        )
+        response = await litellm.acompletion(**fallback_kwargs)
+        result = parse_json_response(response.choices[0].message.content)
+        return validate_pointwise_judge_result(result)
