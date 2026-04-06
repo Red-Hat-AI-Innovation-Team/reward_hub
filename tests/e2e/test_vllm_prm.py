@@ -103,7 +103,7 @@ class TestVLLMProcessRM:
         assert all(isinstance(score, float) for score in model_agg_scores)
 
     def test_vllm_prm_invalid_model(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(OSError):
             model = VllmProcessRewardModel(
                 model_name="invalid_model",
             )

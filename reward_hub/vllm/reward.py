@@ -20,7 +20,6 @@ class VllmProcessRewardModel(AbstractProcessRewardModel):
         print(f"Number of GPUs: {num_gpus}")
         
         self.model = LLM(model=model_name, 
-                    task="reward",
                     gpu_memory_utilization=0.8,
                     tensor_parallel_size=1,
                     )
