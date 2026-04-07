@@ -1,13 +1,221 @@
 """Utility functions for LLM Judge implementations"""
 
+from collections import OrderedDict
 import litellm
 import json
 import inspect
 import functools
+import logging
+from threading import Lock
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-from typing import Callable, TypeVar
+from typing import Any, Callable, Optional, TypeVar
 
 T = TypeVar('T')
+_LOGGER = logging.getLogger(__name__)
+
+_RESPONSE_FORMAT_UNSUPPORTED_CACHE_MAXSIZE = 256
+_RESPONSE_FORMAT_UNSUPPORTED_CACHE: OrderedDict[tuple[str, str], bool] = OrderedDict()
+_RESPONSE_FORMAT_UNSUPPORTED_CACHE_LOCK = Lock()
+
+_RESPONSE_FORMAT_FALLBACK_COUNTER_MAX = 99999
+_RESPONSE_FORMAT_FALLBACK_COUNT = 0
+_RESPONSE_FORMAT_FALLBACK_COUNT_LOCK = Lock()
+
+
+def _response_format_cache_key(*, model: str, base_url: Optional[str]) -> tuple[str, str]:
+    return model.strip().lower(), (base_url or "").strip().lower()
+
+
+def is_response_format_cached_as_unsupported(*, model: str, base_url: Optional[str]) -> bool:
+    key = _response_format_cache_key(model=model, base_url=base_url)
+    with _RESPONSE_FORMAT_UNSUPPORTED_CACHE_LOCK:
+        if key not in _RESPONSE_FORMAT_UNSUPPORTED_CACHE:
+            return False
+        _RESPONSE_FORMAT_UNSUPPORTED_CACHE.move_to_end(key)
+        return _RESPONSE_FORMAT_UNSUPPORTED_CACHE[key]
+
+
+def mark_response_format_as_unsupported(*, model: str, base_url: Optional[str]) -> None:
+    key = _response_format_cache_key(model=model, base_url=base_url)
+    with _RESPONSE_FORMAT_UNSUPPORTED_CACHE_LOCK:
+        _RESPONSE_FORMAT_UNSUPPORTED_CACHE[key] = True
+        _RESPONSE_FORMAT_UNSUPPORTED_CACHE.move_to_end(key)
+        while len(_RESPONSE_FORMAT_UNSUPPORTED_CACHE) > _RESPONSE_FORMAT_UNSUPPORTED_CACHE_MAXSIZE:
+            _RESPONSE_FORMAT_UNSUPPORTED_CACHE.popitem(last=False)
+
+
+def clear_response_format_unsupported_cache() -> None:
+    with _RESPONSE_FORMAT_UNSUPPORTED_CACHE_LOCK:
+        _RESPONSE_FORMAT_UNSUPPORTED_CACHE.clear()
+
+
+def increment_response_format_fallback_counter() -> None:
+    global _RESPONSE_FORMAT_FALLBACK_COUNT
+    with _RESPONSE_FORMAT_FALLBACK_COUNT_LOCK:
+        _RESPONSE_FORMAT_FALLBACK_COUNT = min(
+            _RESPONSE_FORMAT_FALLBACK_COUNT + 1,
+            _RESPONSE_FORMAT_FALLBACK_COUNTER_MAX,
+        )
+
+
+def get_response_format_fallback_counter() -> int:
+    with _RESPONSE_FORMAT_FALLBACK_COUNT_LOCK:
+        return _RESPONSE_FORMAT_FALLBACK_COUNT
+
+
+def get_response_format_fallback_counter_display() -> str:
+    count = get_response_format_fallback_counter()
+    if count >= _RESPONSE_FORMAT_FALLBACK_COUNTER_MAX:
+        return f"{_RESPONSE_FORMAT_FALLBACK_COUNTER_MAX}+"
+    return str(count)
+
+
+def get_response_format_unsupported_cache_size() -> int:
+    with _RESPONSE_FORMAT_UNSUPPORTED_CACHE_LOCK:
+        return len(_RESPONSE_FORMAT_UNSUPPORTED_CACHE)
+
+
+def get_structured_output_fallback_stats() -> dict[str, int | str]:
+    return {
+        "fallback_count": get_response_format_fallback_counter(),
+        "fallback_count_display": get_response_format_fallback_counter_display(),
+        "unsupported_cache_size": get_response_format_unsupported_cache_size(),
+        "unsupported_cache_maxsize": _RESPONSE_FORMAT_UNSUPPORTED_CACHE_MAXSIZE,
+    }
+
+
+def log_structured_output_fallback_stats() -> None:
+    stats = get_structured_output_fallback_stats()
+    _LOGGER.info(
+        "llm_judge structured_output fallback_count=%s fallback_count_display=%s "
+        "unsupported_cache_size=%s unsupported_cache_maxsize=%s",
+        stats["fallback_count"],
+        stats["fallback_count_display"],
+        stats["unsupported_cache_size"],
+        stats["unsupported_cache_maxsize"],
+    )
+
+
+def reset_response_format_fallback_state() -> None:
+    global _RESPONSE_FORMAT_FALLBACK_COUNT
+    clear_response_format_unsupported_cache()
+    with _RESPONSE_FORMAT_FALLBACK_COUNT_LOCK:
+        _RESPONSE_FORMAT_FALLBACK_COUNT = 0
+
+
+def normalize_structured_output_mode(mode: str) -> str:
+    normalized = mode.strip().lower()
+    if normalized not in {"auto", "strict", "off"}:
+        raise ValueError(f"Invalid structured_output_mode '{mode}'. Must be one of: auto, strict, off")
+    return normalized
+
+
+def should_attempt_structured_output(*, structured_output_mode: str, model: str, base_url: Optional[str]) -> bool:
+    if structured_output_mode == "off":
+        return False
+    if structured_output_mode == "auto" and is_response_format_cached_as_unsupported(model=model, base_url=base_url):
+        increment_response_format_fallback_counter()
+        return False
+    return True
+
+
+def handle_structured_output_fallback(*, exc: Exception, structured_output_mode: str,
+                                      model: str, base_url: Optional[str]) -> bool:
+    if structured_output_mode != "auto":
+        return False
+    if not is_response_format_unsupported_error(exc):
+        return False
+    mark_response_format_as_unsupported(model=model, base_url=base_url)
+    increment_response_format_fallback_counter()
+    return True
+
+
+def is_response_format_unsupported_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    if "response_format" not in message and "json_schema" not in message:
+        return False
+    unsupported_markers = (
+        "not supported", "unsupported", "unknown",
+        "invalid parameter", "extra inputs are not permitted",
+    )
+    return any(marker in message for marker in unsupported_markers)
+
+
+def build_pointwise_response_format() -> dict[str, Any]:
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "pointwise_judge_response",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "reasoning": {"type": "string"},
+                    "score": {"type": "number", "minimum": 0.0, "maximum": 10.0},
+                },
+                "required": ["reasoning", "score"],
+            },
+        },
+    }
+
+
+def build_groupwise_response_format(*, num_responses: int, top_n: int) -> dict[str, Any]:
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "groupwise_judge_response",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "reasoning": {"type": "string"},
+                    "selected_indices": {
+                        "type": "array",
+                        "items": {"type": "integer", "minimum": 0, "maximum": num_responses - 1},
+                        "minItems": top_n,
+                        "maxItems": top_n,
+                        "uniqueItems": True,
+                    },
+                },
+                "required": ["reasoning", "selected_indices"],
+            },
+        },
+    }
+
+
+def validate_pointwise_judge_result(result: dict[str, Any]) -> tuple[float, str]:
+    if not isinstance(result.get("reasoning"), str):
+        raise ValueError("pointwise judge response must include string 'reasoning'")
+    score = result.get("score")
+    if not isinstance(score, (int, float)):
+        raise ValueError("pointwise judge response must include numeric 'score'")
+    score_value = float(score)
+    if score_value < 0.0 or score_value > 10.0:
+        raise ValueError("pointwise judge response 'score' must be between 0 and 10")
+    return score_value, result["reasoning"]
+
+
+def validate_groupwise_judge_result(result: dict[str, Any], *, num_responses: int,
+                                    top_n: int) -> tuple[list[int], str]:
+    if not isinstance(result.get("reasoning"), str):
+        raise ValueError("groupwise judge response must include string 'reasoning'")
+    selected_indices = result.get("selected_indices")
+    if not isinstance(selected_indices, list):
+        raise ValueError("groupwise judge response must include list 'selected_indices'")
+    if len(selected_indices) != top_n:
+        raise ValueError(f"groupwise judge response 'selected_indices' must contain exactly {top_n} indices")
+    if len(set(selected_indices)) != len(selected_indices):
+        raise ValueError("groupwise judge response 'selected_indices' must be unique")
+    normalized_indices: list[int] = []
+    for index in selected_indices:
+        if not isinstance(index, int):
+            raise ValueError("groupwise judge response 'selected_indices' must contain integers")
+        if index < 0 or index >= num_responses:
+            raise ValueError("groupwise judge response 'selected_indices' contains out-of-range index")
+        normalized_indices.append(index)
+    return normalized_indices, result["reasoning"]
 
 
 def validate_api_configuration(model: str, **litellm_kwargs):

@@ -4,7 +4,10 @@ import litellm
 from typing import List, Optional, Union
 from ..base import AbstractOutcomeRewardModel, JudgeResult
 from .prompts import CriterionRegistry, GROUPWISE_PROCEDURAL
-from .utils import validate_api_configuration, parse_json_response, extract_message_content, with_retry
+from .utils import (validate_api_configuration, parse_json_response, extract_message_content, with_retry,
+                    build_groupwise_response_format, handle_structured_output_fallback,
+                    normalize_structured_output_mode, should_attempt_structured_output,
+                    validate_groupwise_judge_result)
 
 
 class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
@@ -20,6 +23,7 @@ class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
                  base_url: Optional[str] = None,
                  temperature: float = 0.0,
                  max_tokens: int = 1024,
+                 structured_output_mode: str = "auto",
                  **litellm_kwargs):
         """
         Initialize groupwise judge
@@ -39,8 +43,13 @@ class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
         self.base_url = base_url
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.structured_output_mode = normalize_structured_output_mode(structured_output_mode)
         self.litellm_kwargs = litellm_kwargs
-        
+        self._cache_base_url = base_url
+        if self._cache_base_url is None:
+            api_base = self.litellm_kwargs.get("api_base")
+            self._cache_base_url = str(api_base) if api_base is not None else None
+
         # Store criterion text for runtime composition
         self.criterion_text = CriterionRegistry.get(criterion)
         
@@ -52,7 +61,21 @@ class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
         
         # Validate API key works by making a test call
         validate_api_configuration(self.model, **self.litellm_kwargs)
-    
+
+    def _completion_request(self, *, judge_messages, num_responses, top_n, use_response_format, **kwargs):
+        request_kwargs = {
+            "model": self.model,
+            "messages": judge_messages,
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            **self.litellm_kwargs,
+            **kwargs
+        }
+        if use_response_format:
+            request_kwargs["response_format"] = build_groupwise_response_format(
+                num_responses=num_responses, top_n=top_n)
+        return request_kwargs
+
     def _validate_shared_context(self, conversations: List[List[dict]]) -> None:
         """Validate all conversations share the same context (all messages except last)"""
         first_context = [extract_message_content(msg) for msg in conversations[0][:-1]]
@@ -81,11 +104,13 @@ class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
             raise ValueError("GroupwiseJudgeModel requires multiple conversations, got single conversation")
 
         conversations = messages  # List[List[dict]]
+        if top_n < 1 or top_n > len(conversations):
+            raise ValueError(f"top_n must be between 1 and number of conversations ({len(conversations)})")
         scores, reasoning = self._score_groupwise(conversations, top_n, **kwargs)
         if return_judge_reasoning:
             return JudgeResult(scores=scores, reasonings=[reasoning])
         return scores
-    
+
     @with_retry(max_attempts=3, min_wait=0.1, max_wait=10.0)
     def _score_groupwise(self, conversations: List[List[dict]], top_n: int, **kwargs) -> tuple[List[float], str]:
         """
@@ -119,28 +144,44 @@ class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
             {"role": "user", "content": f"Conversation Context:\n{context_text}\n\nCandidate Responses:\n{responses_text}"}
         ]
 
-        response = litellm.completion(
-            model=self.model,
-            messages=judge_messages,
-            temperature=self.temperature,
-            max_tokens=self.max_tokens,
-            **self.litellm_kwargs,
-            **kwargs
-        )
+        if should_attempt_structured_output(
+            structured_output_mode=self.structured_output_mode,
+            model=self.model, base_url=self._cache_base_url
+        ):
+            request_kwargs = self._completion_request(
+                judge_messages=judge_messages, num_responses=len(conversations),
+                top_n=top_n, use_response_format=True, **kwargs)
+            try:
+                response = litellm.completion(**request_kwargs)
+                result = parse_json_response(response.choices[0].message.content)
+                selected_indices, reasoning = validate_groupwise_judge_result(
+                    result, num_responses=len(conversations), top_n=top_n)
+            except Exception as exc:
+                if not handle_structured_output_fallback(
+                    exc=exc, structured_output_mode=self.structured_output_mode,
+                    model=self.model, base_url=self._cache_base_url
+                ):
+                    raise
+            else:
+                scores = [0.0] * len(conversations)
+                for idx in selected_indices:
+                    scores[idx] = 1.0
+                return scores, reasoning
 
-        # Parse selected indices from JSON response
-        response_text = response.choices[0].message.content
-        result = parse_json_response(response_text)
-        selected_indices = result["selected_indices"]
-        reasoning = result["reasoning"]
+        fallback_kwargs = self._completion_request(
+            judge_messages=judge_messages, num_responses=len(conversations),
+            top_n=top_n, use_response_format=False, **kwargs)
+        response = litellm.completion(**fallback_kwargs)
+        result = parse_json_response(response.choices[0].message.content)
+        selected_indices, reasoning = validate_groupwise_judge_result(
+            result, num_responses=len(conversations), top_n=top_n)
 
         # Convert to binary scores
         scores = [0.0] * len(conversations)
         for idx in selected_indices:
-            if 0 <= idx < len(conversations):
-                scores[idx] = 1.0
+            scores[idx] = 1.0
         return scores, reasoning
-    
+
     async def ascore(self, messages: Union[List[List[dict]], List[dict]], top_n: int = 1, return_judge_reasoning: bool = False, **kwargs) -> Union[List[float], JudgeResult]:
         """
         Async version of score
@@ -162,11 +203,13 @@ class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
             raise ValueError("GroupwiseJudgeModel requires multiple conversations, got single conversation")
 
         conversations = messages  # List[List[dict]]
+        if top_n < 1 or top_n > len(conversations):
+            raise ValueError(f"top_n must be between 1 and number of conversations ({len(conversations)})")
         scores, reasoning = await self._ascore_groupwise(conversations, top_n, **kwargs)
         if return_judge_reasoning:
             return JudgeResult(scores=scores, reasonings=[reasoning])
         return scores
-    
+
     @with_retry(max_attempts=3, min_wait=0.1, max_wait=10.0)
     async def _ascore_groupwise(self, conversations: List[List[dict]], top_n: int, **kwargs) -> tuple[List[float], str]:
         """
@@ -200,24 +243,40 @@ class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
             {"role": "user", "content": f"Conversation Context:\n{context_text}\n\nCandidate Responses:\n{responses_text}"}
         ]
 
-        response = await litellm.acompletion(
-            model=self.model,
-            messages=judge_messages,
-            temperature=self.temperature,
-            max_tokens=self.max_tokens,
-            **self.litellm_kwargs,
-            **kwargs
-        )
+        if should_attempt_structured_output(
+            structured_output_mode=self.structured_output_mode,
+            model=self.model, base_url=self._cache_base_url
+        ):
+            request_kwargs = self._completion_request(
+                judge_messages=judge_messages, num_responses=len(conversations),
+                top_n=top_n, use_response_format=True, **kwargs)
+            try:
+                response = await litellm.acompletion(**request_kwargs)
+                result = parse_json_response(response.choices[0].message.content)
+                selected_indices, reasoning = validate_groupwise_judge_result(
+                    result, num_responses=len(conversations), top_n=top_n)
+            except Exception as exc:
+                if not handle_structured_output_fallback(
+                    exc=exc, structured_output_mode=self.structured_output_mode,
+                    model=self.model, base_url=self._cache_base_url
+                ):
+                    raise
+            else:
+                scores = [0.0] * len(conversations)
+                for idx in selected_indices:
+                    scores[idx] = 1.0
+                return scores, reasoning
 
-        # Parse selected indices from JSON response
-        response_text = response.choices[0].message.content
-        result = parse_json_response(response_text)
-        selected_indices = result["selected_indices"]
-        reasoning = result["reasoning"]
+        fallback_kwargs = self._completion_request(
+            judge_messages=judge_messages, num_responses=len(conversations),
+            top_n=top_n, use_response_format=False, **kwargs)
+        response = await litellm.acompletion(**fallback_kwargs)
+        result = parse_json_response(response.choices[0].message.content)
+        selected_indices, reasoning = validate_groupwise_judge_result(
+            result, num_responses=len(conversations), top_n=top_n)
 
         # Convert to binary scores
         scores = [0.0] * len(conversations)
         for idx in selected_indices:
-            if 0 <= idx < len(conversations):
-                scores[idx] = 1.0
+            scores[idx] = 1.0
         return scores, reasoning

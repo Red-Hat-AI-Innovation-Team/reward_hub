@@ -3,6 +3,9 @@
 from .pointwise import PointwiseJudgeModel
 from .groupwise import GroupwiseJudgeModel
 from .prompts import CriterionRegistry
+from .utils import (get_structured_output_fallback_stats,
+                    log_structured_output_fallback_stats,
+                    reset_response_format_fallback_state)
 
 def create_pointwise_judge(model: str, 
                           criterion: str,
@@ -21,5 +24,8 @@ __all__ = [
     "GroupwiseJudgeModel", 
     "CriterionRegistry",
     "create_pointwise_judge",
-    "create_groupwise_judge"
+    "create_groupwise_judge",
+    "get_structured_output_fallback_stats",
+    "log_structured_output_fallback_stats",
+    "reset_response_format_fallback_state",
 ]
