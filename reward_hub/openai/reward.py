@@ -1,9 +1,14 @@
+import logging
+import time
+
 from transformers import AutoTokenizer
 
 from typing import Union, List
 from reward_hub.base import AbstractOutcomeRewardModel, AbstractProcessRewardModel, AggregationMethod, PRMResult
 from reward_hub.openai.vllm_client import vllmClient, HTTPClient
 from reward_hub.drsow import DrSow, DrSowConfig
+
+logger = logging.getLogger(__name__)
 
 
 class OpenAIOutcomeRewardModel(AbstractOutcomeRewardModel):
@@ -42,9 +47,11 @@ class OpenAIOutcomeRewardModel(AbstractOutcomeRewardModel):
             **kwargs: Additional keyword arguments
         """
         if isinstance(messages[0], dict):
-            # ensure the input is a list of list of dicts   
+            # ensure the input is a list of list of dicts
             messages = [messages]
 
+        t0 = time.perf_counter()
+        logger.info('scoring', extra={'model_name': self.model_name, 'backend': 'openai', 'batch_size': len(messages)})
         if self.model_name == "drsow":
             system_turn = [{
                 "role": "system",
@@ -83,6 +90,7 @@ class OpenAIOutcomeRewardModel(AbstractOutcomeRewardModel):
             reward_results = self.model.get_batch_logprobs(prepared_batch, num_workers=num_workers, mask_logprob_special_tokens=mask_logprob_special_tokens)
             scores = [x["avg_drsow_reward"] for x in reward_results]
 
+            logger.info('scoring_complete', extra={'model_name': self.model_name, 'backend': 'openai', 'batch_size': len(messages), 'latency_ms': round((time.perf_counter() - t0) * 1000, 1)})
             if return_raw_scores:
                 return reward_results
             else:
@@ -117,9 +125,11 @@ class OpenAIProcessRewardModel(AbstractProcessRewardModel):
         if isinstance(aggregation_method, str):
             aggregation_method = AggregationMethod(aggregation_method)
         if isinstance(messages[0], dict):
-            # ensure the input is a list of list of dicts   
+            # ensure the input is a list of list of dicts
             messages = [messages]
 
+        t0 = time.perf_counter()
+        logger.info('scoring', extra={'model_name': self.model_name, 'backend': 'openai', 'batch_size': len(messages)})
         if self.model_name == "Qwen/Qwen2.5-Math-PRM-7B":
             formatted_messages = []
             QWEN_PRM_SYSTEM_PROMPT = "Please reason step by step, and put your final answer within \\boxed{}."
@@ -149,6 +159,7 @@ class OpenAIProcessRewardModel(AbstractProcessRewardModel):
         else:
             raise ValueError(f"Model {self.model_name} is not supported")
         
+        logger.info('scoring_complete', extra={'model_name': self.model_name, 'backend': 'openai', 'batch_size': len(messages), 'latency_ms': round((time.perf_counter() - t0) * 1000, 1)})
         if return_full_prm_result:
             return [PRMResult(scores=scores) for scores in all_scores]
         else:

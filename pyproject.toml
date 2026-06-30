@@ -91,6 +91,9 @@ markers = [
 ]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["E402", "F841"]
 # Dual-mode operation:
 # - Default: pytest              → runs unit tests only (mocked)
 # - E2E:     pytest -m e2e       → runs e2e tests only (real models)

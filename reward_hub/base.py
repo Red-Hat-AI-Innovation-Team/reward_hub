@@ -1,8 +1,11 @@
-from typing import Union, List
-from abc import ABC, abstractmethod
+import logging
 import math
-from enum import Enum
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from enum import Enum
+from typing import Union, List
+
+logger = logging.getLogger(__name__)
 
 
 class AggregationMethod(Enum):
@@ -54,7 +57,9 @@ class PRMResult:
             # model aggregate method; it only has one step
             assert len(scores) == 1, "model aggregate method should only have one step"
             self.score = self.last
-        
+
+        logger.info('prm_aggregation', extra={'method': aggregation_method.value, 'score': self.score, 'num_steps': len(scores)})
+
 
 class AbstractOutcomeRewardModel(ABC):
     """

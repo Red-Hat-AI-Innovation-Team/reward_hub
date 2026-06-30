@@ -1,4 +1,8 @@
+import logging
+import time
+
 import torch
+import torch.nn.functional as F
 from transformers import (
     AutoTokenizer,
     AutoModel,
@@ -7,7 +11,8 @@ from transformers import (
 )
 from typing import Union, List
 from reward_hub.base import AbstractOutcomeRewardModel, AbstractProcessRewardModel, PRMResult, AggregationMethod
-import torch.nn.functional as F
+
+logger = logging.getLogger(__name__)
 
 class HuggingFaceOutcomeRewardModel(AbstractOutcomeRewardModel):
     def __init__(self, model_name: str, **kwargs):
@@ -34,9 +39,11 @@ class HuggingFaceOutcomeRewardModel(AbstractOutcomeRewardModel):
         If messages is a list of dicts, then it is a single conversation.
         """
         if isinstance(messages[0], dict):
-            # ensure the input is a list of list of dicts   
+            # ensure the input is a list of list of dicts
             messages = [messages]
 
+        t0 = time.perf_counter()
+        logger.info('scoring', extra={'model_name': self.model_name, 'backend': 'hf', 'batch_size': len(messages)})
         all_scores = []
         if self.model_name == "internlm/internlm2-7b-reward":
             for conv_messages in messages:
@@ -83,7 +90,8 @@ class HuggingFaceOutcomeRewardModel(AbstractOutcomeRewardModel):
                     all_scores.append(reward_score)
         else:
             raise ValueError(f"Model {self.model_name} is not supported")
-        
+
+        logger.info('scoring_complete', extra={'model_name': self.model_name, 'backend': 'hf', 'batch_size': len(messages), 'latency_ms': round((time.perf_counter() - t0) * 1000, 1)})
         return all_scores
 
 
@@ -129,11 +137,11 @@ class HuggingFaceProcessRewardModel(AbstractProcessRewardModel):
             self.tokenizer.truncation_side = "left"
 
 
-    def score(self, messages: Union[List[List[dict]], List[dict]], step_separator: str = "\n\n", 
-              aggregation_method: Union[AggregationMethod, str] = AggregationMethod.LAST, 
+    def score(self, messages: Union[List[List[dict]], List[dict]], step_separator: str = "\n\n",
+              aggregation_method: Union[AggregationMethod, str] = AggregationMethod.LAST,
               return_full_prm_result: bool = False, max_input_tokens: int = 8192) -> List[Union[PRMResult, float]]:
         """
-        if return_full_prm_result is True, return the PRMResult object.     
+        if return_full_prm_result is True, return the PRMResult object.
         if return_full_prm_result is False, return the score.
         """
         # Convert string to enum if needed for backward compatibility
@@ -141,6 +149,8 @@ class HuggingFaceProcessRewardModel(AbstractProcessRewardModel):
             aggregation_method = AggregationMethod(aggregation_method)
         if isinstance(messages[0], dict):
             messages = [messages]
+        t0 = time.perf_counter()
+        logger.info('scoring', extra={'model_name': self.model_name, 'backend': 'hf', 'batch_size': len(messages)})
         all_scores = []
         if self.model_name == "RLHFlow/Llama3.1-8B-PRM-Deepseek-Data":
             for conv_messages in messages:
@@ -211,6 +221,7 @@ class HuggingFaceProcessRewardModel(AbstractProcessRewardModel):
         else:
             raise ValueError(f"Model {self.model_name} is not supported")
 
+        logger.info('scoring_complete', extra={'model_name': self.model_name, 'backend': 'hf', 'batch_size': len(messages), 'latency_ms': round((time.perf_counter() - t0) * 1000, 1)})
         if return_full_prm_result:
             return [PRMResult(scores=scores, aggregation_method=aggregation_method) for scores in all_scores]
         else:

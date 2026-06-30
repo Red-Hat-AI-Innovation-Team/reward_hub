@@ -27,7 +27,24 @@ def pytest_configure(config):
         print("\n🔧 E2E mode: Using real model imports (no mocking)")
         return
 
-    print("\n✓ Unit test mode: Mocking transformers and vllm")
+    print("\n✓ Unit test mode: Mocking transformers, vllm, and torch")
+    # Mock torch before any reward_hub imports
+    mock_torch = MagicMock()
+    mock_torch.no_grad = MagicMock(return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()))
+    mock_torch.float32 = MagicMock()
+    mock_torch.float16 = MagicMock()
+    mock_torch.bfloat16 = MagicMock()
+    mock_torch.device = MagicMock()
+    mock_torch.Tensor = MagicMock()
+    mock_torch.cuda.device_count = MagicMock(return_value=0)
+    mock_torch_nn = MagicMock()
+    mock_torch_nn_functional = MagicMock()
+    mock_torch.nn = mock_torch_nn
+    mock_torch.nn.functional = mock_torch_nn_functional
+    sys.modules['torch'] = mock_torch
+    sys.modules['torch.nn'] = mock_torch_nn
+    sys.modules['torch.nn.functional'] = mock_torch_nn_functional
+
     # Mock VLLM completely
     mock_vllm = MagicMock()
     mock_vllm.LLM = MagicMock

@@ -1,11 +1,15 @@
 """Utility functions for LLM Judge implementations"""
 
-import litellm
-import json
-import inspect
 import functools
+import inspect
+import json
+import logging
+
+import litellm
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from typing import Callable, TypeVar
+
+logger = logging.getLogger(__name__)
 
 T = TypeVar('T')
 
@@ -23,12 +27,13 @@ def validate_api_configuration(model: str, **litellm_kwargs):
         ConnectionError: If there are network/endpoint issues
     """
     try:
+        logger.info('api_validation_start', extra={'model': model})
         # Make a minimal test call to validate the configuration
         test_messages = [
             {"role": "system", "content": "You are a test assistant."},
             {"role": "user", "content": "Say 'test' and nothing else."}
         ]
-        
+
         response = litellm.completion(
             model=model,
             messages=test_messages,
@@ -36,10 +41,11 @@ def validate_api_configuration(model: str, **litellm_kwargs):
             temperature=0.0,
             **litellm_kwargs
         )
-        
+
         # If we get here, the API configuration is working
         if not response or not response.choices:
             raise ValueError(f"Invalid response from {model} - API configuration may be incorrect")
+        logger.info('api_validation_success', extra={'model': model})
             
     except Exception as e:
         # Parse different types of authentication/configuration errors
@@ -151,13 +157,25 @@ def with_retry(
             @functools.wraps(func)
             async def async_wrapper(*args, **kwargs):
                 async_retry_func = retry_config(func)
-                return await async_retry_func(*args, **kwargs)
+                try:
+                    result = await async_retry_func(*args, **kwargs)
+                    logger.info('retry_call_success', extra={'function': func.__name__})
+                    return result
+                except Exception:
+                    logger.warning('retry_call_failed', extra={'function': func.__name__, 'max_attempts': max_attempts})
+                    raise
             return async_wrapper
         else:
             @functools.wraps(func)
             def sync_wrapper(*args, **kwargs):
                 sync_retry_func = retry_config(func)
-                return sync_retry_func(*args, **kwargs)
+                try:
+                    result = sync_retry_func(*args, **kwargs)
+                    logger.info('retry_call_success', extra={'function': func.__name__})
+                    return result
+                except Exception:
+                    logger.warning('retry_call_failed', extra={'function': func.__name__, 'max_attempts': max_attempts})
+                    raise
             return sync_wrapper
     
     return decorator

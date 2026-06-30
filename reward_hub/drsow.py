@@ -1,5 +1,10 @@
+import logging
+import time
 from multiprocessing import Process, Manager
+
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 class DrSowConfig:
@@ -27,15 +32,17 @@ class DrSow:
                      "prompt": the text to get logprobs for.
                 }
             ]
-        
+
         Return:
-        rewards_chosen = 
+        rewards_chosen =
             [
                 3,
                 4,
                 77
             ]
         """
+        t0 = time.perf_counter()
+        logger.info('drsow_start', extra={'batch_size': len(batch)})
         chosen_messages, _, prompt_batch = [ex["messages"] for ex in batch], [ex["formatted_conv"] for ex in batch], [ex["prompt"] for ex in batch]
 
         tokenized_prompt_batch = [self.tokenizer.encode(ex) for ex in prompt_batch]
@@ -116,4 +123,5 @@ class DrSow:
                 "weak_logprobs": weak_token_logprobs,
             })
 
+        logger.info('drsow_complete', extra={'batch_size': len(batch), 'latency_ms': round((time.perf_counter() - t0) * 1000, 1)})
         return final_reward_dicts
