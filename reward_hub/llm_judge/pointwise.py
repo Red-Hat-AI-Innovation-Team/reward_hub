@@ -1,11 +1,16 @@
 """Pointwise judge implementation using LiteLLM"""
 
+import logging
+import time
+
 import litellm
 import asyncio
 from typing import List, Optional, Union
 from ..base import AbstractOutcomeRewardModel, JudgeResult
 from .prompts import CriterionRegistry, POINTWISE_PROCEDURAL
 from .utils import validate_api_configuration, parse_json_response, with_retry
+
+logger = logging.getLogger(__name__)
 
 
 class PointwiseJudgeModel(AbstractOutcomeRewardModel):
@@ -74,15 +79,21 @@ class PointwiseJudgeModel(AbstractOutcomeRewardModel):
         # Handle single conversation vs multiple conversations
         if isinstance(messages[0], dict):
             # Single conversation: List[dict]
+            t0 = time.perf_counter()
+            logger.info('judge_scoring', extra={'model': self.model, 'criterion': self.criterion, 'num_conversations': 1})
             score, reasoning = self._score_single(messages, **kwargs)
+            logger.info('judge_scoring_complete', extra={'model': self.model, 'score': score, 'latency_ms': round((time.perf_counter() - t0) * 1000, 1)})
             if return_judge_reasoning:
                 return JudgeResult(scores=[score], reasonings=[reasoning])
             return score
         else:
             # Multiple conversations: List[List[dict]]
+            t0 = time.perf_counter()
+            logger.info('judge_scoring', extra={'model': self.model, 'criterion': self.criterion, 'num_conversations': len(messages)})
             results = [self._score_single(conv, **kwargs) for conv in messages]
             scores = [r[0] for r in results]
             reasonings = [r[1] for r in results]
+            logger.info('judge_scoring_complete', extra={'model': self.model, 'num_conversations': len(messages), 'latency_ms': round((time.perf_counter() - t0) * 1000, 1)})
             if return_judge_reasoning:
                 return JudgeResult(scores=scores, reasonings=reasonings)
             return scores

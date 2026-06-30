@@ -1,10 +1,15 @@
 """Groupwise judge implementation using LiteLLM"""
 
+import logging
+import time
+
 import litellm
 from typing import List, Optional, Union
 from ..base import AbstractOutcomeRewardModel, JudgeResult
 from .prompts import CriterionRegistry, GROUPWISE_PROCEDURAL
 from .utils import validate_api_configuration, parse_json_response, extract_message_content, with_retry
+
+logger = logging.getLogger(__name__)
 
 
 class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
@@ -81,7 +86,10 @@ class GroupwiseJudgeModel(AbstractOutcomeRewardModel):
             raise ValueError("GroupwiseJudgeModel requires multiple conversations, got single conversation")
 
         conversations = messages  # List[List[dict]]
+        t0 = time.perf_counter()
+        logger.info('judge_scoring', extra={'model': self.model, 'criterion': self.criterion, 'num_responses': len(conversations)})
         scores, reasoning = self._score_groupwise(conversations, top_n, **kwargs)
+        logger.info('judge_scoring_complete', extra={'model': self.model, 'num_responses': len(conversations), 'latency_ms': round((time.perf_counter() - t0) * 1000, 1)})
         if return_judge_reasoning:
             return JudgeResult(scores=scores, reasonings=[reasoning])
         return scores

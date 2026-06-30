@@ -1,9 +1,14 @@
+import logging
+import os
+import time
+
 import torch
 from transformers import AutoTokenizer
 from typing import Union, List
 from reward_hub.base import AbstractOutcomeRewardModel, AbstractProcessRewardModel, PRMResult, AggregationMethod
-import os
 from vllm import LLM
+
+logger = logging.getLogger(__name__)
 
 
 class VllmOutcomeRewardModel(AbstractOutcomeRewardModel):
@@ -43,8 +48,10 @@ class VllmProcessRewardModel(AbstractProcessRewardModel):
         if isinstance(aggregation_method, str):
             aggregation_method = AggregationMethod(aggregation_method)
         if isinstance(messages[0], dict):
-            # ensure the input is a list of list of dicts   
+            # ensure the input is a list of list of dicts
             messages = [messages]
+        t0 = time.perf_counter()
+        logger.info('scoring', extra={'model_name': self.model_name, 'backend': 'vllm', 'batch_size': len(messages)})
         if self.model_name == "Qwen/Qwen2.5-Math-PRM-7B":
             formatted_convs = []
             QWEN_PRM_SYSTEM_PROMPT = "Please reason step by step, and put your final answer within \\boxed{}."
@@ -84,6 +91,7 @@ class VllmProcessRewardModel(AbstractProcessRewardModel):
         else:
             raise ValueError(f"Model {self.model_name} is not supported")
         
+        logger.info('scoring_complete', extra={'model_name': self.model_name, 'backend': 'vllm', 'batch_size': len(messages), 'latency_ms': round((time.perf_counter() - t0) * 1000, 1)})
         if return_full_prm_result:
             return [PRMResult(scores=scores) for scores in all_scores]
         else:

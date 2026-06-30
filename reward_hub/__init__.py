@@ -1,8 +1,12 @@
+import logging
+import os
+
 from .base import AbstractAutoRewardModel
 from .utils import SUPPORTED_BACKENDS
 from reward_hub.hf.reward import HuggingFaceOutcomeRewardModel, HuggingFaceProcessRewardModel
 from reward_hub.openai.reward import OpenAIOutcomeRewardModel, OpenAIProcessRewardModel
-import os
+
+logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 
 load_method_to_class = {
